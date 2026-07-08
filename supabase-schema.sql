@@ -7,11 +7,12 @@
 -- ---------- tables ----------
 
 create table if not exists public.categories (
-  id          bigint generated always as identity primary key,
-  name        text not null unique,
-  kind        text not null check (kind in ('income','expense')),
-  sort_order  int  not null default 0,
-  created_at  timestamptz not null default now()
+  id             bigint generated always as identity primary key,
+  name           text not null unique,
+  kind           text not null check (kind in ('income','expense')),
+  exclude_from_pl boolean not null default false,  -- transfers/loans/card-processor payouts: shown but not in profit
+  sort_order     int  not null default 0,
+  created_at     timestamptz not null default now()
 );
 
 create table if not exists public.transactions (
@@ -53,6 +54,7 @@ create table if not exists public.rules (
 -- columns added after the first release (no-ops on fresh installs)
 alter table public.transactions add column if not exists report_date date;
 alter table public.rules add column if not exists shift_months int not null default 0;
+alter table public.categories add column if not exists exclude_from_pl boolean not null default false;
 
 create table if not exists public.imports (
   id            bigint generated always as identity primary key,

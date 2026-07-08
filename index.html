@@ -216,9 +216,15 @@
   }
   function catById(id){ return data.categories.find(function(c){ return c.id === id; }) || null; }
   function catName(id){ var c = catById(id); return c ? c.name : "Uncategorized"; }
+  // Categories flagged exclude_from_pl (transfers, loans, card-processor payouts that
+  // settle income counted elsewhere) are shown in lists but never hit profit math.
+  function catExcluded(id){ var c = catById(id); return !!(c && c.exclude_from_pl); }
+  function inPL(t){ return !catExcluded(t.category_id); }
   function sortedCats(){
     return data.categories.slice().sort(function(a,b){
-      return (a.kind===b.kind ? 0 : a.kind==="income" ? -1 : 1) || a.sort_order - b.sort_order || a.id - b.id;
+      var ra = a.exclude_from_pl ? 2 : a.kind==="income" ? 0 : 1;
+      var rb = b.exclude_from_pl ? 2 : b.kind==="income" ? 0 : 1;
+      return ra - rb || a.sort_order - b.sort_order || a.id - b.id;
     });
   }
   // color follows the category id (stable across filters), never its rank in a chart
@@ -385,6 +391,7 @@
     var m = [];
     for (var i=0;i<12;i++) m.push({ income:0, expense:0, profit:0, margin:null });
     txInYear(year).forEach(function(t){
+      if (!inPL(t)) return;
       var mi = Number(txDate(t).slice(5,7)) - 1;
       if (t.amount_cents > 0) m[mi].income += t.amount_cents;
       else m[mi].expense += -t.amount_cents;
@@ -398,6 +405,7 @@
   function totals(txs){
     var income = 0, expense = 0;
     txs.forEach(function(t){
+      if (!inPL(t)) return;
       if (t.amount_cents > 0) income += t.amount_cents; else expense += -t.amount_cents;
     });
     var profit = income - expense;
@@ -407,7 +415,7 @@
   function categoryBreakdown(txs){
     var by = {};
     txs.forEach(function(t){
-      if (t.amount_cents >= 0) return;
+      if (t.amount_cents >= 0 || !inPL(t)) return;
       var k = t.category_id == null ? "null" : String(t.category_id);
       by[k] = (by[k] || 0) + (-t.amount_cents);
     });
@@ -816,12 +824,17 @@
 
   // ----- transactions -----
   function catSelect(current, opts){
+    var groups = [
+      { label:"Income",  test:function(c){ return !c.exclude_from_pl && c.kind==="income"; } },
+      { label:"Expense", test:function(c){ return !c.exclude_from_pl && c.kind==="expense"; } },
+      { label:"Transfers (not in profit)", test:function(c){ return c.exclude_from_pl; } }
+    ];
     var sel = h("select", opts || null,
       h("option",{value:""},"— uncategorized —"),
-      ["income","expense"].map(function(kind){
-        return h("optgroup",{label: kind==="income" ? "Income" : "Expense"},
-          sortedCats().filter(function(c){ return c.kind===kind; })
-            .map(function(c){ return h("option",{value:String(c.id)}, c.name); }));
+      groups.map(function(g){
+        var cs = sortedCats().filter(g.test);
+        return cs.length ? h("optgroup",{label:g.label},
+          cs.map(function(c){ return h("option",{value:String(c.id)}, c.name); })) : null;
       })
     );
     sel.value = current == null ? "" : String(current);
@@ -1088,9 +1101,16 @@
     cc.append(h("div",{class:"row wrap"},
       h("h2",{style:{flex:"1",margin:"0"}},"Categories"),
       null));
-    ["income","expense"].forEach(function(kind){
-      cc.append(h("div",{class:"section-label",style:{marginTop:"12px"}}, kind === "income" ? "Income" : "Expenses"));
-      sortedCats().filter(function(c){ return c.kind === kind; }).forEach(function(c){
+    var groups = [
+      { label:"Income",  test:function(c){ return !c.exclude_from_pl && c.kind==="income"; } },
+      { label:"Expenses", test:function(c){ return !c.exclude_from_pl && c.kind==="expense"; } },
+      { label:"Transfers (not counted in profit)", test:function(c){ return c.exclude_from_pl; } }
+    ];
+    groups.forEach(function(g){
+      var cs = sortedCats().filter(g.test);
+      if (!cs.length && g.label.indexOf("Transfers") === 0) return;
+      cc.append(h("div",{class:"section-label",style:{marginTop:"12px"}}, g.label));
+      cs.forEach(function(c){
         var inp = h("input",{type:"text",value:c.name});
         inp.addEventListener("change", function(){
           var v = inp.value.trim();
@@ -1106,14 +1126,22 @@
       });
     });
     var newName = h("input",{type:"text",class:"small",placeholder:"new category name",style:{flex:"1",minWidth:"140px"}});
-    var newKind = h("select",{class:"small"}, h("option",{value:"expense"},"Expense"), h("option",{value:"income"},"Income"));
+    var newKind = h("select",{class:"small"},
+      h("option",{value:"expense"},"Expense"),
+      h("option",{value:"income"},"Income"),
+      h("option",{value:"transfer"},"Transfer (not in profit)"));
     cc.append(h("div",{class:"row wrap",style:{marginTop:"10px"}},
       newName, newKind,
       h("button",{class:"small primary", onclick:function(){
         var v = newName.value.trim(); if (!v) { newName.focus(); return; }
         var max = data.categories.reduce(function(m,c){ return Math.max(m, c.sort_order); }, 0);
-        mutate(function(){ return sb.from("categories").insert({ name:v, kind:newKind.value, sort_order:max+1 }); });
+        var isTransfer = newKind.value === "transfer";
+        mutate(function(){ return sb.from("categories").insert({
+          name:v, kind: isTransfer ? "expense" : newKind.value,
+          exclude_from_pl: isTransfer, sort_order:max+1 }); });
       }},"+ Add")));
+    cc.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
+      "“Transfer” categories (owner money, loans, card-processor payouts) show in your transactions but are left out of income, expenses and profit."));
     APP.append(cc);
 
     // --- rules ---

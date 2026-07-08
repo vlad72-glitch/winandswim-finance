@@ -28,6 +28,7 @@ create table if not exists public.transactions (
   transaction_ref     text not null default '',          -- "Transactiereferentie"
   balance_after_cents bigint,                            -- "Saldo na trn"
   category_id         bigint references public.categories(id) on delete set null,
+  report_date         date,                               -- month the cost/income belongs to, when it differs from booking_date (e.g. invoices paid a month later)
   source              text not null default 'import' check (source in ('import','manual')),
   created_at          timestamptz not null default now(),
   -- (IBAN, Volgnr) uniquely identifies a booked Rabobank transaction, so
@@ -45,8 +46,13 @@ create table if not exists public.rules (
   match_field text not null default 'any' check (match_field in ('counterparty','description','any')),
   category_id bigint not null references public.categories(id) on delete cascade,
   priority    int not null default 100,   -- lower = checked first
+  shift_months int not null default 0,    -- -1 = invoice covers the previous month (report_date shifts back)
   created_at  timestamptz not null default now()
 );
+
+-- columns added after the first release (no-ops on fresh installs)
+alter table public.transactions add column if not exists report_date date;
+alter table public.rules add column if not exists shift_months int not null default 0;
 
 create table if not exists public.imports (
   id            bigint generated always as identity primary key,

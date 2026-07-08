@@ -71,6 +71,9 @@ counterparties (pool rental, insurance, …) are categorized automatically.
 
 - **Dashboard** — pick a year/month: income vs expenses, profit, margin %, cost breakdown.
 - **Transactions** — filter, search, and assign categories (rows marked *review* need one).
+  Each row also has a **"counts in" month** — use it when an invoice is paid in a
+  different month than the one it covers (e.g. pool rent for May paid in June).
+  Rules can do this automatically ("month before" option in Settings).
 - **Import** — upload new CSV exports.
 - **Settings** — categories, auto-categorization rules, import history.
 - **Add to phone**: open the site in Safari/Chrome → Share → **Add to Home Screen**.

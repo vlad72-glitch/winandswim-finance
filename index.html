@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="W&S Finance">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0284c7">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Win and Swim Finance</title>
+<style>
+  :root{
+    --bg:#f3f6f8; --card:#ffffff; --ink:#13212b; --muted:#5f7280; --line:#e1e8ed;
+    --accent:#0284c7; --accent-ink:#075985; --accent-bg:#e0f2fe;
+    --good:#15803d; --good-bg:#dcfce7; --bad:#dc2626; --bad-bg:#fef2f2; --warn:#b45309;
+    /* chart roles (dataviz reference palette, light mode) */
+    --viz-income:#2a78d6; --viz-expense:#eb6834; --viz-profit:#1baf7a;
+    --viz-muted:#898781; --viz-grid:#e1e0d9; --viz-baseline:#c3c2b7;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45; -webkit-text-size-adjust:100%;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:14px 14px 60px;}
+  header{display:flex;align-items:center;gap:10px;padding:10px 4px 10px;flex-wrap:wrap;}
+  header h1{font-size:1.15rem;margin:0;font-weight:700;display:flex;align-items:center;gap:7px;}
+  header .spacer{flex:1;}
+  nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 14px;}
+  nav.tabs button{border-radius:999px;padding:6px 14px;font-size:.92rem;}
+  nav.tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button{
+    font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:9px;padding:7px 12px;transition:background .12s,border-color .12s;
+  }
+  button:hover{background:#eef3f6;}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button.primary:hover{background:#0369a1;}
+  button.good{background:var(--good);border-color:var(--good);color:#fff;}
+  button.good:hover{background:#166534;}
+  button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:5px 8px;}
+  button.ghost:hover{background:#e9eef1;color:var(--ink);}
+  button.danger{color:var(--bad);border-color:transparent;background:transparent;}
+  button.danger:hover{background:var(--bad-bg);}
+  button:disabled{opacity:.5;cursor:default;}
+  button.small{padding:3px 8px;font-size:.8rem;border-radius:7px;}
+  input,select,textarea{
+    font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-bg);border-color:var(--accent);}
+  select.small,input.small{padding:4px 8px;font-size:.85rem;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(16,42,58,.04);}
+  .card h2{margin:0 0 2px;font-size:1.15rem;}
+  .row{display:flex;align-items:center;gap:10px;}
+  .row.wrap{flex-wrap:wrap;}
+  .muted{color:var(--muted);}
+  .small{font-size:.85rem;}
+  .tiny{font-size:.78rem;}
+  .stack>*+*{margin-top:10px;}
+  .section-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 8px;}
+  .err{background:var(--bad-bg);color:var(--bad);border:1px solid #f3c2c2;border-radius:9px;padding:8px 10px;font-size:.9rem;margin-top:8px;}
+  .banner{background:#fff7ed;color:var(--warn);border:1px solid #fcd9a8;border-radius:9px;padding:8px 10px;font-size:.88rem;margin-bottom:12px;}
+  .banner.ok{background:var(--good-bg);color:var(--good);border-color:#b7e4c3;}
+  .center{text-align:center;}
+  .empty{text-align:center;color:var(--muted);padding:26px 10px;}
+  /* KPI tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;}
+  .tile .lbl{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+  .tile .val{font-size:1.35rem;font-weight:700;margin-top:2px;}
+  .tile .sub{font-size:.78rem;color:var(--muted);margin-top:2px;}
+  .amt-pos{color:var(--good);}
+  .amt-neg{color:var(--bad);}
+  /* filter row */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  .filters input[type=search]{flex:1;min-width:140px;}
+  .filters label.chk{display:inline-flex;align-items:center;gap:5px;font-size:.85rem;color:var(--muted);white-space:nowrap;cursor:pointer;}
+  /* chart cards */
+  .chart-box{position:relative;height:260px;}
+  .chart-box.tall{height:300px;}
+  /* transactions table */
+  .tx-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line);font-size:.9rem;}
+  .tx-row:last-child{border-bottom:none;}
+  .tx-date{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;width:82px;flex-shrink:0;}
+  .tx-main{flex:1;min-width:0;}
+  .tx-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tx-desc{color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tx-amt{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600;text-align:right;width:100px;flex-shrink:0;}
+  .tx-row select{max-width:150px;}
+  .badge{font-size:.7rem;font-weight:600;background:#eef3f6;color:var(--muted);padding:1px 7px;border-radius:999px;white-space:nowrap;}
+  .badge.warn{background:#fff7ed;color:var(--warn);}
+  /* dropzone */
+  .dropzone{border:2px dashed var(--line);border-radius:14px;padding:34px 16px;text-align:center;color:var(--muted);
+    background:var(--card);cursor:pointer;transition:border-color .12s,background .12s;}
+  .dropzone.over{border-color:var(--accent);background:var(--accent-bg);}
+  .editline{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .editline:last-child{border-bottom:none;}
+  .editline input[type=text]{flex:1;min-width:110px;}
+  .preview-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+  .preview-table th,.preview-table td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
+  .preview-table th{color:var(--muted);font-weight:600;}
+  .scroll-x{overflow-x:auto;}
+  @media (max-width:560px){
+    .tx-row{flex-wrap:wrap;}
+    .tx-amt{width:auto;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>💶 Win and Swim Finance</h1>
+    <span class="spacer"></span>
+    <span id="who"></span>
+  </header>
+  <div id="app"></div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------- tiny DOM helper ----------
+  function h(tag, props){
+    var e = document.createElement(tag);
+    if (props) for (var k in props){
+      var v = props[k];
+      if (v == null || v === false) continue;
+      if (k === "class") e.className = v;
+      else if (k === "html") e.innerHTML = v;
+      else if (k === "style" && typeof v === "object") Object.assign(e.style, v);
+      else if (k.slice(0,2) === "on" && typeof v === "function") e.addEventListener(k.slice(2), v);
+      else if (v === true) e.setAttribute(k, "");
+      else e.setAttribute(k, v);
+    }
+    for (var i=2;i<arguments.length;i++){
+      var kid = arguments[i];
+      (Array.isArray(kid) ? kid : [kid]).forEach(function(c){
+        if (c == null || c === false) return;
+        e.append(c.nodeType ? c : document.createTextNode(String(c)));
+      });
+    }
+    return e;
+  }
+  function clear(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+  function debounce(fn, ms){ var t; return function(){ clearTimeout(t); t=setTimeout(fn, ms); }; }
+  var APP = document.getElementById("app");
+  var WHO = document.getElementById("who");
+
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var eurFmt = new Intl.NumberFormat("nl-NL", { style:"currency", currency:"EUR" });
+  function fmtEUR(cents){ return eurFmt.format(cents / 100); }
+  function fmtDate(iso){
+    if (!iso) return "";
+    var p = String(iso).split("-");
+    return p.length === 3 ? p[2] + " " + MONTHS[Number(p[1])-1] + " " + p[0].slice(2) : iso;
+  }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+  // ---------- chart palette (validated with the dataviz palette validator) ----------
+  var VIZ = {
+    income:"#2a78d6", expense:"#eb6834", profit:"#1baf7a",
+    muted:"#898781", grid:"#e1e0d9", baseline:"#c3c2b7",
+    slots:["#2a78d6","#1baf7a","#eda100","#008300","#4a3aa7","#e34948","#e87ba4","#eb6834"],
+    uncategorized:"#898781", other:"#c3c2b7"
+  };
+
+  // ---------- config / client ----------
+  var cfg = window.WSFIN_CONFIG || {};
+  var configured = cfg.url && cfg.anonKey && cfg.url.indexOf("YOUR-") === -1 && cfg.anonKey.indexOf("YOUR-") === -1;
+  var sb = null;
+  if (configured && window.supabase) sb = window.supabase.createClient(cfg.url, cfg.anonKey);
+
+  // ---------- state ----------
+  var session = null;
+  var data = { categories:[], rules:[], transactions:[], imports:[] };
+  var view = { name:"dashboard" };
+  var now = new Date();
+  var filters = { year: now.getFullYear(), month: null, categoryId: "", search: "", uncategorizedOnly: false };
+  var txLimit = 100;
+  var importState = null;  // { filename, rows, errors, busy, result:{added,skipped,uncategorized} }
+  var charts = {};
+  var loginError = "";
+  var addingManual = false;
+  var editingTxId = null;
+
+  function nav(name){
+    view = { name:name };
+    txLimit = 100;
+    if (name !== "import") importState = null;
+    render();
+  }
+
+  // ---------- data helpers ----------
+  function catById(id){ return data.categories.find(function(c){ return c.id === id; }) || null; }
+  function catName(id){ var c = catById(id); return c ? c.name : "Uncategorized"; }
+  function sortedCats(){
+    return data.categories.slice().sort(function(a,b){
+      return (a.kind===b.kind ? 0 : a.kind==="income" ? -1 : 1) || a.sort_order - b.sort_order || a.id - b.id;
+    });
+  }
+  // color follows the category id (stable across filters), never its rank in a chart
+  function catColor(id){
+    if (id == null) return VIZ.uncategorized;
+    var ids = data.categories.map(function(c){ return c.id; }).sort(function(a,b){ return a-b; });
+    var i = ids.indexOf(id);
+    return i === -1 ? VIZ.other : VIZ.slots[i % VIZ.slots.length];
+  }
+  function txYears(){
+    var ys = {};
+    data.transactions.forEach(function(t){ ys[Number(t.booking_date.slice(0,4))] = true; });
+    ys[now.getFullYear()] = true;
+    return Object.keys(ys).map(Number).sort(function(a,b){ return b-a; });
+  }
+
+  // ---------- money parsing ----------
+  // Rabobank "Bedrag": "+1.234,56" / "-12,50" (decimal comma, optional thousands dots)
+  function parseAmountCents(s){
+    if (s == null) return null;
+    s = String(s).trim();
+    if (!s) return null;
+    var sign = 1;
+    if (s[0] === "-"){ sign = -1; s = s.slice(1); }
+    else if (s[0] === "+"){ s = s.slice(1); }
+    s = s.replace(/\./g, "");
+    var parts = s.split(",");
+    if (parts.length > 2 || !/^\d+$/.test(parts[0]) || (parts[1] != null && !/^\d{1,2}$/.test(parts[1]))) return null;
+    var cents = Number(parts[0]) * 100 + (parts[1] ? Number((parts[1] + "00").slice(0,2)) : 0);
+    return sign * cents;
+  }
+  // user-typed amounts: accepts "12,50", "12.50", "1.234,56", "1,234.56", "1200"
+  function parseUserAmount(s){
+    s = String(s == null ? "" : s).trim().replace(/[€\s]/g, "");
+    if (!s) return null;
+    var lastComma = s.lastIndexOf(","), lastDot = s.lastIndexOf(".");
+    var dec = Math.max(lastComma, lastDot);
+    var intPart, fracPart;
+    if (dec === -1){ intPart = s; fracPart = ""; }
+    else {
+      // rightmost separator is the decimal one only if followed by 1-2 digits
+      fracPart = s.slice(dec + 1);
+      if (/^\d{1,2}$/.test(fracPart)){ intPart = s.slice(0, dec); }
+      else { intPart = s; fracPart = ""; }
+    }
+    intPart = intPart.replace(/[.,]/g, "");
+    if (!/^\d+$/.test(intPart)) return null;
+    return Number(intPart) * 100 + (fracPart ? Number((fracPart + "00").slice(0,2)) : 0);
+  }
+
+  // ---------- CSV parsing ----------
+  function decodeCSVFile(buf){
+    try{ return new TextDecoder("utf-8", { fatal:true }).decode(buf); }
+    catch(e){ return new TextDecoder("windows-1252").decode(buf); }
+  }
+  // RFC-4180 state machine: quoted fields, "" escapes, CR/LF/CRLF
+  function parseCSV(text){
+    var rows = [], row = [], field = "", inQ = false, i = 0, ch;
+    while (i < text.length){
+      ch = text[i];
+      if (inQ){
+        if (ch === '"'){
+          if (text[i+1] === '"'){ field += '"'; i += 2; continue; }
+          inQ = false; i++; continue;
+        }
+        field += ch; i++; continue;
+      }
+      if (ch === '"'){ inQ = true; i++; continue; }
+      if (ch === ","){ row.push(field); field = ""; i++; continue; }
+      if (ch === "\r"){ i++; continue; }
+      if (ch === "\n"){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += ch; i++;
+    }
+    if (field !== "" || row.length){ row.push(field); rows.push(row); }
+    return rows.filter(function(r){ return r.length > 1 || (r.length === 1 && r[0].trim() !== ""); });
+  }
+  function normHeader(s){
+    return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  }
+  function parseRabobankCSV(text){
+    var rows = parseCSV(text);
+    if (!rows.length) return { rows:[], errors:["File is empty."] };
+    var header = rows[0].map(normHeader);
+    function col(name){ return header.indexOf(normHeader(name)); }
+    var C = {
+      iban: col("IBAN/BBAN"), munt: col("Munt"), volgnr: col("Volgnr"),
+      datum: col("Datum"), bedrag: col("Bedrag"), saldo: col("Saldo na trn"),
+      cIban: col("Tegenrekening IBAN/BBAN"), cName: col("Naam tegenpartij"),
+      code: col("Code"), ref: col("Transactiereferentie"),
+      o1: col("Omschrijving-1"), o2: col("Omschrijving-2"), o3: col("Omschrijving-3")
+    };
+    var missing = ["iban","volgnr","datum","bedrag"].filter(function(k){ return C[k] === -1; });
+    if (missing.length){
+      return { rows:[], errors:["This does not look like a Rabobank CSV export — missing column(s): " +
+        missing.map(function(k){ return {iban:"IBAN/BBAN",volgnr:"Volgnr",datum:"Datum",bedrag:"Bedrag"}[k]; }).join(", ") +
+        ". In Rabobank online banking choose Download → CSV (kommagescheiden)."] };
+    }
+    function get(r, i){ return i === -1 ? "" : String(r[i] == null ? "" : r[i]).trim(); }
+    var out = [], errors = [];
+    for (var li = 1; li < rows.length; li++){
+      var r = rows[li], line = li + 1;
+      var volgnr = get(r, C.volgnr);
+      var datum = get(r, C.datum);
+      var cents = parseAmountCents(get(r, C.bedrag));
+      var munt = get(r, C.munt) || "EUR";
+      if (!/^\d+$/.test(volgnr)){ errors.push("Line " + line + ": missing or invalid Volgnr — skipped."); continue; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)){ errors.push("Line " + line + ": invalid date \"" + datum + "\" — skipped."); continue; }
+      if (cents == null){ errors.push("Line " + line + ": could not read amount \"" + get(r, C.bedrag) + "\" — skipped."); continue; }
+      if (munt.toUpperCase() !== "EUR"){ errors.push("Line " + line + ": non-EUR currency " + munt + " — skipped."); continue; }
+      var desc = [get(r,C.o1), get(r,C.o2), get(r,C.o3)].filter(Boolean).join(" ").trim();
+      out.push({
+        account_iban: get(r, C.iban),
+        sequence_no: Number(volgnr),
+        booking_date: datum,
+        amount_cents: cents,
+        currency: "EUR",
+        counterparty_iban: get(r, C.cIban),
+        counterparty_name: get(r, C.cName),
+        description: desc,
+        code: get(r, C.code),
+        transaction_ref: get(r, C.ref),
+        balance_after_cents: parseAmountCents(get(r, C.saldo)),
+        source: "import"
+      });
+    }
+    return { rows: out, errors: errors };
+  }
+
+  // ---------- rule engine ----------
+  function sortedRules(){
+    return data.rules.slice().sort(function(a,b){ return a.priority - b.priority || a.id - b.id; });
+  }
+  function categorize(tx, rules){
+    for (var i=0;i<rules.length;i++){
+      var r = rules[i];
+      var hay = (r.match_field === "counterparty" ? tx.counterparty_name
+              : r.match_field === "description" ? tx.description
+              : tx.counterparty_name + " " + tx.description).toLowerCase();
+      if (r.keyword && hay.indexOf(r.keyword.toLowerCase()) !== -1) return r.category_id;
+    }
+    return null;
+  }
+
+  // ---------- aggregations ----------
+  function txInYear(year){
+    var y = String(year);
+    return data.transactions.filter(function(t){ return t.booking_date.slice(0,4) === y; });
+  }
+  function monthlySummary(year){
+    var m = [];
+    for (var i=0;i<12;i++) m.push({ income:0, expense:0, profit:0, margin:null });
+    txInYear(year).forEach(function(t){
+      var mi = Number(t.booking_date.slice(5,7)) - 1;
+      if (t.amount_cents > 0) m[mi].income += t.amount_cents;
+      else m[mi].expense += -t.amount_cents;
+    });
+    m.forEach(function(x){
+      x.profit = x.income - x.expense;
+      x.margin = x.income > 0 ? (x.profit / x.income) * 100 : null;
+    });
+    return m;
+  }
+  function totals(txs){
+    var income = 0, expense = 0;
+    txs.forEach(function(t){
+      if (t.amount_cents > 0) income += t.amount_cents; else expense += -t.amount_cents;
+    });
+    var profit = income - expense;
+    return { income:income, expense:expense, profit:profit, margin: income > 0 ? (profit/income)*100 : null };
+  }
+  // expense totals per category, sorted desc, tail beyond 7 folded into "Other"
+  function categoryBreakdown(txs){
+    var by = {};
+    txs.forEach(function(t){
+      if (t.amount_cents >= 0) return;
+      var k = t.category_id == null ? "null" : String(t.category_id);
+      by[k] = (by[k] || 0) + (-t.amount_cents);
+    });
+    var items = Object.keys(by).map(function(k){
+      return { categoryId: k === "null" ? null : Number(k),
+               label: k === "null" ? "Uncategorized" : catName(Number(k)),
+               total: by[k] };
+    }).sort(function(a,b){ return b.total - a.total; });
+    if (items.length > 8){
+      var head = items.slice(0,7);
+      var rest = items.slice(7).reduce(function(s,x){ return s + x.total; }, 0);
+      head.push({ categoryId:"other", label:"Other", total:rest });
+      return head;
+    }
+    return items;
+  }
+
+  // ---------- supabase calls ----------
+  async function fetchAllTransactions(){
+    var all = [], from = 0, page = 1000;
+    for(;;){
+      var r = await sb.from("transactions").select("*")
+        .order("booking_date", { ascending:false }).order("id", { ascending:false })
+        .range(from, from + page - 1);
+      if (r.error) throw r.error;
+      all = all.concat(r.data || []);
+      if (!r.data || r.data.length < page) break;
+      from += page;
+    }
+    return all;
+  }
+  async function loadAll(){
+    if (!sb || !session) return;
+    var res = await Promise.all([
+      sb.from("categories").select("*"),
+      sb.from("rules").select("*"),
+      sb.from("imports").select("*").order("imported_at", { ascending:false }).limit(30)
+    ]);
+    var firstErr = res.find(function(r){ return r.error; });
+    if (firstErr) throw firstErr.error;
+    data.categories = res[0].data || [];
+    data.rules = res[1].data || [];
+    data.imports = res[2].data || [];
+    data.transactions = await fetchAllTransactions();
+  }
+
+  var refreshing = false;
+  async function refresh(){
+    if (!sb || !session || refreshing) return;
+    var ae = document.activeElement;
+    if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
+    refreshing = true;
+    try{ await loadAll(); render(); }
+    catch(e){ console.warn("refresh failed", e); }
+    finally{ refreshing = false; }
+  }
+
+  async function mutate(promiseFactory){
+    if (!session){ alert("You are logged out."); return false; }
+    try{
+      var r = await promiseFactory();
+      if (r && r.error) throw r.error;
+      await loadAll();
+      render();
+      return r;
+    }catch(e){
+      alert("Couldn't save: " + (e.message || e));
+      return false;
+    }
+  }
+
+  function setTxCategory(id, categoryId){
+    return mutate(function(){ return sb.from("transactions").update({ category_id: categoryId }).eq("id", id); });
+  }
+  function deleteTx(id){
+    return mutate(function(){ return sb.from("transactions").delete().eq("id", id); });
+  }
+
+  async function applyRulesToUncategorized(){
+    var rules = sortedRules();
+    var groups = {};   // categoryId -> [txId]
+    data.transactions.forEach(function(t){
+      if (t.category_id != null) return;
+      var cid = categorize(t, rules);
+      if (cid != null) (groups[cid] = groups[cid] || []).push(t.id);
+    });
+    var cids = Object.keys(groups);
+    if (!cids.length){ alert("No uncategorized transactions matched any rule."); return; }
+    var n = cids.reduce(function(s,k){ return s + groups[k].length; }, 0);
+    await mutate(function(){
+      return Promise.all(cids.map(function(cid){
+        return sb.from("transactions").update({ category_id: Number(cid) }).in("id", groups[cid]);
+      })).then(function(rs){ return rs.find(function(r){ return r.error; }) || { error:null }; });
+    });
+    alert("Categorized " + n + " transaction" + (n===1?"":"s") + " using your rules.");
+  }
+
+  // ---------- import ----------
+  async function handleFile(file){
+    if (!file) return;
+    importState = { filename: file.name, rows: [], errors: [], busy: false, result: null };
+    try{
+      var buf = await file.arrayBuffer();
+      var parsed = parseRabobankCSV(decodeCSVFile(buf));
+      importState.rows = parsed.rows;
+      importState.errors = parsed.errors;
+    }catch(e){
+      importState.errors = ["Could not read file: " + (e.message || e)];
+    }
+    render();
+  }
+
+  async function doImport(){
+    if (!importState || !importState.rows.length || importState.busy) return;
+    importState.busy = true;
+    render();
+    var rules = sortedRules();
+    var rows = importState.rows.map(function(t){
+      var o = Object.assign({}, t);
+      o.category_id = categorize(t, rules);
+      return o;
+    });
+    var added = 0, error = null;
+    for (var i = 0; i < rows.length && !error; i += 500){
+      var chunk = rows.slice(i, i + 500);
+      var r = await sb.from("transactions")
+        .upsert(chunk, { onConflict:"account_iban,sequence_no", ignoreDuplicates:true })
+        .select("id,category_id");
+      if (r.error){ error = r.error; break; }
+      added += (r.data || []).length;
+    }
+    if (error){
+      importState.busy = false;
+      importState.errors = importState.errors.concat(["Import failed: " + error.message]);
+      render();
+      return;
+    }
+    var skipped = rows.length - added;
+    await sb.from("imports").insert({ filename: importState.filename, added_count: added, skipped_count: skipped });
+    try{ await loadAll(); }catch(e){ console.warn(e); }
+    var uncategorized = data.transactions.filter(function(t){ return t.category_id == null; }).length;
+    importState.busy = false;
+    importState.result = { added: added, skipped: skipped, uncategorized: uncategorized };
+    importState.rows = [];
+    render();
+  }
+
+  // ---------- auth ----------
+  async function signIn(email, password){
+    loginError = "";
+    var r = await sb.auth.signInWithPassword({ email: email.trim(), password: password });
+    if (r.error){ loginError = r.error.message; render(); }
+  }
+  async function signOut(){
+    await sb.auth.signOut();
+    data = { categories:[], rules:[], transactions:[], imports:[] };
+  }
+
+  // ---------- header ----------
+  function renderWho(){
+    clear(WHO);
+    if (!sb || !session) return;
+    WHO.append(
+      h("span",{class:"small muted",style:{marginRight:"8px"}}, session.user.email),
+      h("button",{class:"ghost small", onclick: signOut }, "Log out")
+    );
+  }
+
+  // ---------- charts ----------
+  function destroyCharts(){
+    Object.keys(charts).forEach(function(k){ try{ charts[k].destroy(); }catch(e){} });
+    charts = {};
+  }
+  function renderChart(id, cfg){
+    var el = document.getElementById(id);
+    if (!el || !window.Chart) return;
+    charts[id] = new Chart(el, cfg);
+  }
+  function baseScales(eur){
+    return {
+      x: { grid: { display:false }, border: { color: VIZ.baseline },
+           ticks: { color: VIZ.muted } },
+      y: { grid: { color: VIZ.grid }, border: { display:false },
+           ticks: { color: VIZ.muted,
+             callback: eur ? function(v){ return "€" + (Math.abs(v) >= 1000 ? (v/1000) + "k" : v); }
+                           : function(v){ return v + "%"; } } }
+    };
+  }
+  var tooltipEUR = {
+    callbacks: { label: function(c){
+      return " " + c.dataset.label + ": " + fmtEUR(Math.round(c.parsed.y * 100));
+    } }
+  };
+
+  // ---------- render ----------
+  function render(){
+    renderWho();
+    destroyCharts();
+    clear(APP);
+
+    if (!configured){
+      APP.append(h("div",{class:"card stack"},
+        h("h2",null,"Almost there — needs setup"),
+        h("p",{class:"muted"},"This app isn't connected to its database yet. Open ", h("b",null,"config.js"),
+          " and fill in your Supabase project URL and anon key (see ", h("b",null,"SETUP.md"), ").")
+      ));
+      return;
+    }
+    if (!window.supabase){
+      APP.append(h("div",{class:"card"}, h("p",null,"Couldn't load the database library. Check your internet connection and reload.")));
+      return;
+    }
+    // hard login gate: nothing renders without a session
+    if (!session){ return renderLogin(); }
+
+    APP.append(h("nav",{class:"tabs"},
+      ["dashboard","transactions","import","settings"].map(function(n){
+        return h("button",{class: view.name===n ? "active" : "", onclick:function(){ nav(n); }},
+          n.charAt(0).toUpperCase() + n.slice(1));
+      })
+    ));
+
+    if (view.name === "transactions") return renderTransactions();
+    if (view.name === "import") return renderImport();
+    if (view.name === "settings") return renderSettings();
+    return renderDashboard();
+  }
+
+  function renderLogin(){
+    var email = h("input",{type:"email",placeholder:"email",autocomplete:"username"});
+    var pass = h("input",{type:"password",placeholder:"password",autocomplete:"current-password"});
+    function go(){ signIn(email.value, pass.value); }
+    APP.append(h("div",{class:"card stack",style:{maxWidth:"420px",margin:"40px auto"}},
+      h("h2",null,"Log in"),
+      h("p",{class:"muted small"},"Private finance dashboard for Win and Swim."),
+      email, pass,
+      loginError ? h("div",{class:"err"}, loginError) : null,
+      h("div",{class:"row"}, h("button",{class:"primary", onclick:go },"Log in"))
+    ));
+    pass.addEventListener("keydown",function(e){ if(e.key==="Enter") go(); });
+    setTimeout(function(){ email.focus(); },0);
+  }
+
+  // ----- dashboard -----
+  function renderDashboard(){
+    var years = txYears();
+    if (years.indexOf(filters.year) === -1) filters.year = years[0];
+
+    // filter row: year + month
+    var ysel = h("select",null, years.map(function(y){ return h("option",{value:String(y)}, String(y)); }));
+    ysel.value = String(filters.year);
+    ysel.addEventListener("change", function(){ filters.year = Number(ysel.value); render(); });
+    var msel = h("select",null,
+      h("option",{value:""},"Whole year"),
+      MONTHS.map(function(m,i){ return h("option",{value:String(i)}, m); }));
+    msel.value = filters.month == null ? "" : String(filters.month);
+    msel.addEventListener("change", function(){ filters.month = msel.value === "" ? null : Number(msel.value); render(); });
+    APP.append(h("div",{class:"filters"}, ysel, msel));
+
+    if (!data.transactions.length){
+      APP.append(h("div",{class:"card empty"},
+        "No transactions yet. Go to ", h("a",{class:"link",href:"#",onclick:function(e){ e.preventDefault(); nav("import"); }},"Import"),
+        " and upload your first Rabobank CSV export."));
+      return;
+    }
+
+    var yearTx = txInYear(filters.year);
+    var summary = monthlySummary(filters.year);
+    var ytd = totals(yearTx);
+    var periodTx = filters.month == null ? yearTx
+      : yearTx.filter(function(t){ return Number(t.booking_date.slice(5,7)) - 1 === filters.month; });
+    var period = totals(periodTx);
+    var periodLbl = filters.month == null ? String(filters.year) : MONTHS[filters.month] + " " + filters.year;
+
+    // KPI tiles
+    function tile(lbl, val, cls, sub){
+      return h("div",{class:"tile"},
+        h("div",{class:"lbl"}, lbl),
+        h("div",{class:"val " + (cls || "")}, val),
+        h("div",{class:"sub"}, sub));
+    }
+    var ytdSub = filters.month == null ? "selected: whole year" : String(filters.year) + " so far: ";
+    APP.append(h("div",{class:"tiles"},
+      tile("Income " + periodLbl, fmtEUR(period.income), "", filters.month == null ? "" : "year: " + fmtEUR(ytd.income)),
+      tile("Expenses " + periodLbl, fmtEUR(period.expense), "", filters.month == null ? "" : "year: " + fmtEUR(ytd.expense)),
+      tile("Profit " + periodLbl, fmtEUR(period.profit), period.profit >= 0 ? "amt-pos" : "amt-neg",
+        filters.month == null ? "" : "year: " + fmtEUR(ytd.profit)),
+      tile("Margin " + periodLbl, period.margin == null ? "—" : period.margin.toFixed(1) + "%",
+        period.margin != null && period.margin >= 0 ? "amt-pos" : (period.margin == null ? "" : "amt-neg"),
+        filters.month == null ? "" : "year: " + (ytd.margin == null ? "—" : ytd.margin.toFixed(1) + "%"))
+    ));
+
+    // income vs expenses + profit (one shared EUR axis)
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Income vs expenses per month — " + filters.year),
+      h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-monthly"}))));
+    // margin (different unit → its own chart)
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Profit margin per month — " + filters.year),
+      h("div",{class:"chart-box"}, h("canvas",{id:"chart-margin"}))));
+    // expense breakdown
+    var breakdown = categoryBreakdown(periodTx);
+    var bd = h("div",{class:"card"},
+      h("div",{class:"section-label"},"Expenses by category — " + periodLbl));
+    if (!breakdown.length){
+      bd.append(h("div",{class:"empty"},"No expenses in this period."));
+    } else {
+      bd.append(h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-categories"})));
+    }
+    APP.append(bd);
+
+    // ---- Chart.js instances (canvases are now in the DOM) ----
+    var eur = function(c){ return c / 100; };
+    renderChart("chart-monthly", {
+      data: {
+        labels: MONTHS,
+        datasets: [
+          { type:"bar", label:"Income", data: summary.map(function(m){ return eur(m.income); }),
+            backgroundColor: VIZ.income, borderRadius:4, borderSkipped:"start",
+            categoryPercentage:.72, barPercentage:.9 },
+          { type:"bar", label:"Expenses", data: summary.map(function(m){ return eur(m.expense); }),
+            backgroundColor: VIZ.expense, borderRadius:4, borderSkipped:"start",
+            categoryPercentage:.72, barPercentage:.9 },
+          { type:"line", label:"Profit", data: summary.map(function(m){ return eur(m.profit); }),
+            borderColor: VIZ.profit, backgroundColor: VIZ.profit,
+            borderWidth:2, pointRadius:3, pointHoverRadius:5, tension:.25 }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:"index", intersect:false },
+        plugins:{ legend:{ position:"bottom", labels:{ color:"#52514e", usePointStyle:true, boxWidth:8 } },
+                  tooltip: tooltipEUR },
+        scales: baseScales(true)
+      }
+    });
+    renderChart("chart-margin", {
+      type:"line",
+      data: {
+        labels: MONTHS,
+        datasets: [{ label:"Margin", data: summary.map(function(m){ return m.margin; }),
+          borderColor: VIZ.income, backgroundColor: VIZ.income,
+          borderWidth:2, pointRadius:3, pointHoverRadius:5, tension:.25, spanGaps:false }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:"index", intersect:false },
+        plugins:{ legend:{ display:false },
+          tooltip:{ callbacks:{ label:function(c){
+            return c.parsed.y == null ? " no income" : " margin: " + c.parsed.y.toFixed(1) + "%";
+          } } } },
+        scales: (function(){
+          var s = baseScales(false);
+          s.y.grid = { color: function(ctx){ return ctx.tick.value === 0 ? VIZ.baseline : VIZ.grid; } };
+          return s;
+        })()
+      }
+    });
+    if (breakdown.length){
+      renderChart("chart-categories", {
+        type:"doughnut",
+        data: {
+          labels: breakdown.map(function(b){ return b.label; }),
+          datasets: [{
+            data: breakdown.map(function(b){ return eur(b.total); }),
+            backgroundColor: breakdown.map(function(b){
+              return b.categoryId === "other" ? VIZ.other : catColor(b.categoryId);
+            }),
+            borderColor:"#ffffff", borderWidth:2
+          }]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false, cutout:"58%",
+          plugins:{
+            legend:{ position:"bottom", labels:{ color:"#52514e", usePointStyle:true, boxWidth:8,
+              generateLabels: function(chart){
+                var d = chart.data;
+                return d.labels.map(function(lbl, i){
+                  return { text: lbl + "  " + fmtEUR(Math.round(d.datasets[0].data[i]*100)),
+                    fillStyle: d.datasets[0].backgroundColor[i], strokeStyle:"transparent",
+                    pointStyle:"circle", index:i };
+                });
+              } } },
+            tooltip:{ callbacks:{ label:function(c){
+              return " " + c.label + ": " + fmtEUR(Math.round(c.parsed*100));
+            } } }
+          }
+        }
+      });
+    }
+  }
+
+  // ----- transactions -----
+  function catSelect(current, opts){
+    var sel = h("select", opts || null,
+      h("option",{value:""},"— uncategorized —"),
+      ["income","expense"].map(function(kind){
+        return h("optgroup",{label: kind==="income" ? "Income" : "Expense"},
+          sortedCats().filter(function(c){ return c.kind===kind; })
+            .map(function(c){ return h("option",{value:String(c.id)}, c.name); }));
+      })
+    );
+    sel.value = current == null ? "" : String(current);
+    return sel;
+  }
+
+  function filteredTx(){
+    var y = String(filters.year), q = filters.search.trim().toLowerCase();
+    return data.transactions.filter(function(t){
+      if (t.booking_date.slice(0,4) !== y) return false;
+      if (filters.month != null && Number(t.booking_date.slice(5,7)) - 1 !== filters.month) return false;
+      if (filters.uncategorizedOnly && t.category_id != null) return false;
+      if (filters.categoryId !== ""){
+        if (filters.categoryId === "none"){ if (t.category_id != null) return false; }
+        else if (t.category_id !== Number(filters.categoryId)) return false;
+      }
+      if (q && (t.counterparty_name + " " + t.description).toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+
+  function renderTransactions(){
+    var years = txYears();
+    if (years.indexOf(filters.year) === -1) filters.year = years[0];
+
+    var ysel = h("select",{class:"small"}, years.map(function(y){ return h("option",{value:String(y)}, String(y)); }));
+    ysel.value = String(filters.year);
+    ysel.addEventListener("change", function(){ filters.year = Number(ysel.value); txLimit = 100; render(); });
+
+    var msel = h("select",{class:"small"},
+      h("option",{value:""},"All months"),
+      MONTHS.map(function(m,i){ return h("option",{value:String(i)}, m); }));
+    msel.value = filters.month == null ? "" : String(filters.month);
+    msel.addEventListener("change", function(){ filters.month = msel.value === "" ? null : Number(msel.value); txLimit = 100; render(); });
+
+    var csel = h("select",{class:"small"},
+      h("option",{value:""},"All categories"),
+      h("option",{value:"none"},"Uncategorized"),
+      sortedCats().map(function(c){ return h("option",{value:String(c.id)}, c.name); }));
+    csel.value = filters.categoryId;
+    csel.addEventListener("change", function(){ filters.categoryId = csel.value; txLimit = 100; render(); });
+
+    var search = h("input",{type:"search",placeholder:"Search counterparty or description…",value:filters.search});
+    var uncat = h("input",{type:"checkbox"});
+    uncat.checked = filters.uncategorizedOnly;
+
+    var listBox = h("div",{class:"card",style:{padding:"6px 14px"}});
+    var countLbl = h("span",{class:"tiny muted"});
+
+    function fillList(){
+      clear(listBox);
+      var txs = filteredTx();
+      var t = totals(txs);
+      countLbl.textContent = txs.length + " transaction" + (txs.length===1?"":"s") +
+        " · in " + fmtEUR(t.income) + " · out " + fmtEUR(t.expense);
+      if (!txs.length){
+        listBox.append(h("div",{class:"empty"},"No transactions match these filters."));
+        return;
+      }
+      txs.slice(0, txLimit).forEach(function(t){ listBox.append(txRow(t)); });
+      if (txs.length > txLimit){
+        listBox.append(h("div",{class:"center",style:{padding:"10px 0"}},
+          h("button",{onclick:function(){ txLimit += 200; fillList(); }},
+            "Show more (" + (txs.length - txLimit) + " left)")));
+      }
+    }
+
+    search.addEventListener("input", debounce(function(){
+      filters.search = search.value; txLimit = 100; fillList();
+    }, 200));
+    uncat.addEventListener("change", function(){
+      filters.uncategorizedOnly = uncat.checked; txLimit = 100; fillList();
+    });
+
+    APP.append(h("div",{class:"filters"}, ysel, msel, csel, search,
+      h("label",{class:"chk"}, uncat, "Uncategorized only")));
+    APP.append(h("div",{class:"row wrap",style:{margin:"0 2px 8px"}},
+      countLbl, h("span",{class:"spacer",style:{flex:"1"}}),
+      h("button",{class:"small", onclick:function(){ addingManual = !addingManual; render(); }},
+        addingManual ? "Close" : "+ Add manual")));
+
+    if (addingManual) APP.append(manualForm(null));
+
+    APP.append(listBox);
+    fillList();
+  }
+
+  function txRow(t){
+    if (editingTxId === t.id) return manualForm(t);
+    var sel = catSelect(t.category_id, {class:"small"});
+    sel.addEventListener("change", function(){
+      setTxCategory(t.id, sel.value === "" ? null : Number(sel.value));
+    });
+    return h("div",{class:"tx-row"},
+      h("span",{class:"tx-date"}, fmtDate(t.booking_date)),
+      h("div",{class:"tx-main"},
+        h("div",{class:"tx-name"}, t.counterparty_name || (t.source === "manual" ? "(manual entry)" : "(no name)"),
+          t.source === "manual" ? h("span",{class:"badge",style:{marginLeft:"6px"}},"manual") : null,
+          t.category_id == null ? h("span",{class:"badge warn",style:{marginLeft:"6px"}},"review") : null),
+        t.description ? h("div",{class:"tx-desc"}, t.description) : null),
+      sel,
+      h("span",{class:"tx-amt " + (t.amount_cents >= 0 ? "amt-pos" : "amt-neg")}, fmtEUR(t.amount_cents)),
+      t.source === "manual" ? h("button",{class:"ghost small",title:"Edit", onclick:function(){ editingTxId = t.id; addingManual = false; render(); }},"✎") : null,
+      t.source === "manual" ? h("button",{class:"danger small",title:"Delete", onclick:function(){
+        if (confirm("Delete this manual entry?")) deleteTx(t.id);
+      }},"✕") : null
+    );
+  }
+
+  // add (t == null) or edit (t = manual transaction) form
+  function manualForm(t){
+    var isEdit = !!t;
+    var date = h("input",{type:"date",class:"small",value: t ? t.booking_date : todayISO()});
+    var kind = h("select",{class:"small"}, h("option",{value:"income"},"Income"), h("option",{value:"expense"},"Expense"));
+    kind.value = t ? (t.amount_cents >= 0 ? "income" : "expense") : "expense";
+    var amt = h("input",{type:"text",class:"small",placeholder:"amount, e.g. 125,50",inputmode:"decimal",
+      value: t ? (Math.abs(t.amount_cents)/100).toFixed(2).replace(".",",") : "", style:{width:"120px"}});
+    var name = h("input",{type:"text",class:"small",placeholder:"who / what",value: t ? t.counterparty_name : "",style:{flex:"1",minWidth:"130px"}});
+    var desc = h("input",{type:"text",class:"small",placeholder:"description (optional)",value: t ? t.description : "",style:{flex:"1",minWidth:"130px"}});
+    var cat = catSelect(t ? t.category_id : null, {class:"small"});
+    var errBox = h("div");
+
+    function save(){
+      clear(errBox);
+      var cents = parseUserAmount(amt.value);
+      if (cents == null || cents === 0){ errBox.append(h("div",{class:"err"},"Enter a valid amount, e.g. 125,50")); return; }
+      if (!date.value){ errBox.append(h("div",{class:"err"},"Pick a date.")); return; }
+      var row = {
+        booking_date: date.value,
+        amount_cents: kind.value === "income" ? cents : -cents,
+        counterparty_name: name.value.trim(),
+        description: desc.value.trim(),
+        category_id: cat.value === "" ? null : Number(cat.value),
+        account_iban: "MANUAL", sequence_no: null, source: "manual", currency: "EUR"
+      };
+      addingManual = false; editingTxId = null;
+      mutate(function(){
+        return isEdit ? sb.from("transactions").update(row).eq("id", t.id)
+                      : sb.from("transactions").insert(row);
+      });
+    }
+    return h("div",{class:"card",style:{padding:"12px 14px"}},
+      h("div",{class:"section-label"}, isEdit ? "Edit manual entry" : "Add manual entry"),
+      h("div",{class:"row wrap"}, date, kind, amt, cat),
+      h("div",{class:"row wrap",style:{marginTop:"8px"}}, name, desc),
+      errBox,
+      h("div",{class:"row",style:{marginTop:"10px"}},
+        h("button",{class:"primary small", onclick:save}, isEdit ? "Save" : "Add"),
+        h("button",{class:"ghost small", onclick:function(){ addingManual = false; editingTxId = null; render(); }},"Cancel"))
+    );
+  }
+
+  // ----- import -----
+  function renderImport(){
+    APP.append(h("div",{class:"card"},
+      h("h2",null,"Import Rabobank transactions"),
+      h("p",{class:"muted small"},
+        "In Rabobank online banking: Payments → Transactions → Download → ",
+        h("b",null,"CSV (kommagescheiden)"),
+        ". Pick any period — re-uploading overlapping exports is safe, duplicates are skipped automatically.")));
+
+    var st = importState;
+
+    if (st && st.result){
+      var res = st.result;
+      APP.append(h("div",{class:"banner ok"},
+        "Imported " + st.filename + ": added " + res.added + ", skipped " + res.skipped + " duplicate" + (res.skipped===1?"":"s") + "."));
+      if (res.uncategorized > 0){
+        APP.append(h("div",{class:"banner"},
+          res.uncategorized + " transaction" + (res.uncategorized===1?" is":"s are") + " uncategorized. ",
+          h("a",{class:"link",href:"#",onclick:function(e){
+            e.preventDefault();
+            filters.uncategorizedOnly = true; filters.categoryId = ""; filters.search = "";
+            nav("transactions");
+          }},"Review them →")));
+      }
+    }
+
+    // dropzone
+    var fileInput = h("input",{type:"file",accept:".csv,text/csv",style:{display:"none"}});
+    fileInput.addEventListener("change", function(){ handleFile(fileInput.files[0]); fileInput.value = ""; });
+    var dz = h("div",{class:"dropzone"},
+      h("div",{style:{fontSize:"1.6rem"}},"📄"),
+      h("div",null, h("b",null,"Drop your Rabobank CSV here")," or click to choose a file"));
+    dz.addEventListener("click", function(){ fileInput.click(); });
+    dz.addEventListener("dragover", function(e){ e.preventDefault(); dz.classList.add("over"); });
+    dz.addEventListener("dragleave", function(){ dz.classList.remove("over"); });
+    dz.addEventListener("drop", function(e){
+      e.preventDefault(); dz.classList.remove("over");
+      handleFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+    });
+    APP.append(dz, fileInput);
+
+    if (!st) return;
+
+    if (st.errors.length){
+      var eb = h("div",{class:"card",style:{marginTop:"14px"}},
+        h("div",{class:"section-label"},"Warnings (" + st.errors.length + ")"));
+      st.errors.slice(0,8).forEach(function(x){ eb.append(h("div",{class:"small",style:{color:"var(--warn)"}}, x)); });
+      if (st.errors.length > 8) eb.append(h("div",{class:"tiny muted"}, "…and " + (st.errors.length-8) + " more."));
+      APP.append(eb);
+    }
+
+    if (!st.rows.length || st.result) return;
+
+    // preview
+    var rules = sortedRules();
+    var withCat = st.rows.map(function(t){ return { tx:t, cat: categorize(t, rules) }; });
+    var nUncat = withCat.filter(function(x){ return x.cat == null; }).length;
+    var t = totals(st.rows);
+    var dates = st.rows.map(function(x){ return x.booking_date; }).sort();
+
+    var pv = h("div",{class:"card",style:{marginTop:"14px"}},
+      h("h2",null,"Preview — " + st.filename),
+      h("p",{class:"small muted"},
+        st.rows.length + " rows · " + fmtDate(dates[0]) + " → " + fmtDate(dates[dates.length-1]) +
+        " · in " + fmtEUR(t.income) + " · out " + fmtEUR(t.expense) +
+        (nUncat ? " · " + nUncat + " would be uncategorized" : " · all rows matched a rule")));
+    var tbl = h("table",{class:"preview-table"},
+      h("thead",null,h("tr",null,["Date","Counterparty","Description","Amount","Category"].map(function(x){ return h("th",null,x); }))));
+    var tb = h("tbody");
+    withCat.slice(0,15).forEach(function(x){
+      tb.append(h("tr",null,
+        h("td",null,fmtDate(x.tx.booking_date)),
+        h("td",null,x.tx.counterparty_name),
+        h("td",null,x.tx.description),
+        h("td",{class: x.tx.amount_cents>=0 ? "amt-pos" : "amt-neg"}, fmtEUR(x.tx.amount_cents)),
+        h("td",null, x.cat == null ? h("span",{class:"badge warn"},"review") : catName(x.cat))
+      ));
+    });
+    tbl.append(tb);
+    pv.append(h("div",{class:"scroll-x"}, tbl));
+    if (st.rows.length > 15) pv.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},"…showing first 15 of " + st.rows.length + " rows."));
+    pv.append(h("div",{class:"row",style:{marginTop:"12px"}},
+      h("button",{class:"primary", disabled: st.busy, onclick:doImport}, st.busy ? "Importing…" : "Import " + st.rows.length + " rows"),
+      h("button",{class:"ghost", disabled: st.busy, onclick:function(){ importState = null; render(); }},"Cancel")));
+    APP.append(pv);
+  }
+
+  // ----- settings -----
+  function renderSettings(){
+    // --- categories ---
+    var cc = h("div",{class:"card"});
+    cc.append(h("div",{class:"row wrap"},
+      h("h2",{style:{flex:"1",margin:"0"}},"Categories"),
+      null));
+    ["income","expense"].forEach(function(kind){
+      cc.append(h("div",{class:"section-label",style:{marginTop:"12px"}}, kind === "income" ? "Income" : "Expenses"));
+      sortedCats().filter(function(c){ return c.kind === kind; }).forEach(function(c){
+        var inp = h("input",{type:"text",value:c.name});
+        inp.addEventListener("change", function(){
+          var v = inp.value.trim();
+          if (v && v !== c.name) mutate(function(){ return sb.from("categories").update({ name:v }).eq("id", c.id); });
+        });
+        cc.append(h("div",{class:"editline"},
+          h("span",{style:{display:"inline-block",width:"10px",height:"10px",borderRadius:"999px",background:catColor(c.id),flexShrink:"0"}}),
+          inp,
+          h("button",{class:"danger small", onclick:function(){
+            if (!confirm("Delete category \"" + c.name + "\"?\nIts transactions become uncategorized (they are not deleted). Rules pointing to it are removed.")) return;
+            mutate(function(){ return sb.from("categories").delete().eq("id", c.id); });
+          }},"✕")));
+      });
+    });
+    var newName = h("input",{type:"text",class:"small",placeholder:"new category name",style:{flex:"1",minWidth:"140px"}});
+    var newKind = h("select",{class:"small"}, h("option",{value:"expense"},"Expense"), h("option",{value:"income"},"Income"));
+    cc.append(h("div",{class:"row wrap",style:{marginTop:"10px"}},
+      newName, newKind,
+      h("button",{class:"small primary", onclick:function(){
+        var v = newName.value.trim(); if (!v) { newName.focus(); return; }
+        var max = data.categories.reduce(function(m,c){ return Math.max(m, c.sort_order); }, 0);
+        mutate(function(){ return sb.from("categories").insert({ name:v, kind:newKind.value, sort_order:max+1 }); });
+      }},"+ Add")));
+    APP.append(cc);
+
+    // --- rules ---
+    var rc = h("div",{class:"card"});
+    rc.append(h("div",{class:"row wrap"},
+      h("h2",{style:{flex:"1",margin:"0"}},"Auto-categorization rules"),
+      h("button",{class:"small", onclick:applyRulesToUncategorized},"Apply rules to all uncategorized")));
+    rc.append(h("p",{class:"muted small"},"On import, the first matching rule (lowest priority number first) sets the category. Keywords are case-insensitive."));
+    sortedRules().forEach(function(r){
+      var kw = h("input",{type:"text",value:r.keyword,style:{flex:"1",minWidth:"110px"}});
+      kw.addEventListener("change", function(){
+        var v = kw.value.trim();
+        if (v && v !== r.keyword) mutate(function(){ return sb.from("rules").update({ keyword:v }).eq("id", r.id); });
+      });
+      var fld = h("select",{class:"small"},
+        h("option",{value:"any"},"name + description"),
+        h("option",{value:"counterparty"},"counterparty name"),
+        h("option",{value:"description"},"description"));
+      fld.value = r.match_field;
+      fld.addEventListener("change", function(){ mutate(function(){ return sb.from("rules").update({ match_field: fld.value }).eq("id", r.id); }); });
+      var cat = catSelect(r.category_id, {class:"small"});
+      cat.addEventListener("change", function(){
+        if (cat.value === "") { cat.value = String(r.category_id); return; }
+        mutate(function(){ return sb.from("rules").update({ category_id: Number(cat.value) }).eq("id", r.id); });
+      });
+      var pri = h("input",{type:"number",class:"small",value:String(r.priority),style:{width:"70px"},title:"priority (lower runs first)"});
+      pri.addEventListener("change", function(){ mutate(function(){ return sb.from("rules").update({ priority: Number(pri.value) || 0 }).eq("id", r.id); }); });
+      rc.append(h("div",{class:"editline"},
+        kw, fld, h("span",{class:"tiny muted"},"→"), cat, pri,
+        h("button",{class:"danger small", onclick:function(){
+          if (confirm("Delete this rule?")) mutate(function(){ return sb.from("rules").delete().eq("id", r.id); });
+        }},"✕")));
+    });
+    var nkw = h("input",{type:"text",class:"small",placeholder:"keyword, e.g. optisport",style:{flex:"1",minWidth:"140px"}});
+    var ncat = catSelect(null, {class:"small"});
+    rc.append(h("div",{class:"row wrap",style:{marginTop:"10px"}},
+      nkw, ncat,
+      h("button",{class:"small primary", onclick:function(){
+        var v = nkw.value.trim();
+        if (!v){ nkw.focus(); return; }
+        if (ncat.value === ""){ alert("Pick a category for the rule."); return; }
+        mutate(function(){ return sb.from("rules").insert({ keyword:v, match_field:"any", category_id:Number(ncat.value), priority:100 }); });
+      }},"+ Add rule")));
+    APP.append(rc);
+
+    // --- import history ---
+    var ic = h("div",{class:"card"});
+    ic.append(h("h2",null,"Import history"));
+    if (!data.imports.length) ic.append(h("div",{class:"muted small"},"No imports yet."));
+    data.imports.forEach(function(im){
+      ic.append(h("div",{class:"editline"},
+        h("span",{class:"small",style:{flex:"1"}}, im.filename),
+        h("span",{class:"tiny muted"}, "+" + im.added_count + " / " + im.skipped_count + " skipped"),
+        h("span",{class:"tiny muted"}, new Date(im.imported_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}))));
+    });
+    APP.append(ic);
+  }
+
+  // ---------- boot ----------
+  async function boot(){
+    if (!configured || !window.supabase){ render(); return; }
+    APP.append(h("div",{class:"empty"},"Loading…"));
+
+    var sres = await sb.auth.getSession();
+    session = (sres.data && sres.data.session) || null;
+
+    sb.auth.onAuthStateChange(function(_event, newSession){
+      var had = !!session;
+      session = newSession || null;
+      if (!!session !== had){
+        loadAll().then(render).catch(function(e){ console.warn(e); render(); });
+      }
+    });
+
+    if (session){
+      try{ await loadAll(); }
+      catch(e){
+        clear(APP);
+        APP.append(h("div",{class:"card"}, h("p",null,"Couldn't reach the database: " + (e.message||e)),
+          h("button",{class:"primary", onclick:function(){ boot(); }},"Retry")));
+        return;
+      }
+    }
+    render();
+    window.addEventListener("focus", refresh);
+  }
+
+  boot();
+})();
+</script>
+<script>
+  // Installable-app service worker (no-op on file://; only runs over https).
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+  }
+</script>
+</body>
+</html>

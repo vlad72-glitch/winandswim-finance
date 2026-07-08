@@ -103,6 +103,13 @@
   .editline{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
   .editline:last-child{border-bottom:none;}
   .editline input[type=text]{flex:1;min-width:110px;}
+  /* dashboard P&L tables */
+  .pl-table{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums;}
+  .pl-table th,.pl-table td{padding:5px 9px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);}
+  .pl-table th:first-child,.pl-table td:first-child{text-align:left;}
+  .pl-table thead th{color:var(--muted);font-weight:600;font-size:.76rem;text-transform:uppercase;letter-spacing:.03em;}
+  .pl-table tr.total td{font-weight:700;border-top:2px solid var(--line);border-bottom:none;}
+  .pl-table tr:last-child td{border-bottom:none;}
   .preview-table{width:100%;border-collapse:collapse;font-size:.8rem;}
   .preview-table th,.preview-table td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
   .preview-table th{color:var(--muted);font-weight:600;}
@@ -740,6 +747,84 @@
       bd.append(h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-categories"})));
     }
     APP.append(bd);
+
+    // ---- monthly P&L table ----
+    var activeMonths = [];
+    summary.forEach(function(m,i){ if (m.income || m.expense) activeMonths.push(i); });
+    if (activeMonths.length){
+      var yTot = totals(yearTx);
+      var plt = h("table",{class:"pl-table"},
+        h("thead",null,h("tr",null,
+          h("th",null,"Month"), h("th",null,"Income"), h("th",null,"Expenses"),
+          h("th",null,"Profit"), h("th",null,"Margin"))),
+        h("tbody",null,
+          activeMonths.map(function(i){
+            var m = summary[i];
+            return h("tr",null,
+              h("td",null, MONTHS[i]),
+              h("td",null, fmtEUR(m.income)),
+              h("td",null, fmtEUR(m.expense)),
+              h("td",{class: m.profit >= 0 ? "amt-pos" : "amt-neg"}, fmtEUR(m.profit)),
+              h("td",null, m.margin == null ? "—" : m.margin.toFixed(1) + "%"));
+          }),
+          h("tr",{class:"total"},
+            h("td",null,"Total " + filters.year),
+            h("td",null, fmtEUR(yTot.income)),
+            h("td",null, fmtEUR(yTot.expense)),
+            h("td",{class: yTot.profit >= 0 ? "amt-pos" : "amt-neg"}, fmtEUR(yTot.profit)),
+            h("td",null, yTot.margin == null ? "—" : yTot.margin.toFixed(1) + "%"))
+        ));
+      APP.append(h("div",{class:"card"},
+        h("div",{class:"section-label"},"Month by month — " + filters.year),
+        h("div",{class:"scroll-x"}, plt)));
+
+      // ---- expense sources per month (category × month matrix) ----
+      var rowsByCat = {};   // catKey -> { label, months: [12], total }
+      txInYear(filters.year).forEach(function(t){
+        if (t.amount_cents >= 0 || !inPL(t)) return;
+        var key = t.category_id == null ? "u" : String(t.category_id);
+        var r = rowsByCat[key] || (rowsByCat[key] = {
+          label: t.category_id == null ? "Uncategorized" : catName(t.category_id),
+          months: [0,0,0,0,0,0,0,0,0,0,0,0], total: 0 });
+        var mi = Number(txDate(t).slice(5,7)) - 1;
+        r.months[mi] += -t.amount_cents;
+        r.total += -t.amount_cents;
+      });
+      var catRows = Object.keys(rowsByCat).map(function(k){ return rowsByCat[k]; })
+        .sort(function(a,b){ return b.total - a.total; });
+      if (catRows.length){
+        var expMonths = activeMonths.filter(function(i){
+          return catRows.some(function(r){ return r.months[i] !== 0; });
+        });
+        var colTot = expMonths.map(function(i){
+          return catRows.reduce(function(s,r){ return s + r.months[i]; }, 0);
+        });
+        var grand = catRows.reduce(function(s,r){ return s + r.total; }, 0);
+        var xt = h("table",{class:"pl-table"},
+          h("thead",null,h("tr",null,
+            h("th",null,"Expense source"),
+            expMonths.map(function(i){ return h("th",null, MONTHS[i]); }),
+            h("th",null,"Total"),
+            h("th",null,"%"))),
+          h("tbody",null,
+            catRows.map(function(r){
+              return h("tr",null,
+                h("td",null, r.label),
+                expMonths.map(function(i){ return h("td",null, r.months[i] ? fmtEUR(r.months[i]) : "·"); }),
+                h("td",null, fmtEUR(r.total)),
+                h("td",null, grand ? (r.total / grand * 100).toFixed(1) + "%" : "—"));
+            }),
+            h("tr",{class:"total"},
+              h("td",null,"Total"),
+              expMonths.map(function(i,ci){ return h("td",null, fmtEUR(colTot[ci])); }),
+              h("td",null, fmtEUR(grand)),
+              h("td",null,"100%"))
+          ));
+        APP.append(h("div",{class:"card"},
+          h("div",{class:"section-label"},"Where the money goes — expenses per source, " + filters.year),
+          h("div",{class:"scroll-x"}, xt)));
+      }
+    }
 
     // ---- Chart.js instances (canvases are now in the DOM) ----
     var eur = function(c){ return c / 100; };

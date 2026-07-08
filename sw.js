@@ -1,7 +1,7 @@
 /* Win and Swim Finance — service worker.
    Bump CACHE_NAME (v1 → v2 → …) whenever you change any file, so
    installed phones drop the old cached version. */
-var CACHE_NAME = "ws-finance-v5";
+var CACHE_NAME = "ws-finance-v6";
 var ASSETS = [
   "./",
   "./index.html",

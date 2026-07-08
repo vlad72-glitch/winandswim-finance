@@ -290,19 +290,26 @@
     var rows = parseCSV(text);
     if (!rows.length) return { rows:[], errors:["File is empty."] };
     var header = rows[0].map(normHeader);
-    function col(name){ return header.indexOf(normHeader(name)); }
+    // Rabobank names the columns in the language of your banking UI; accept both.
+    function col(names){
+      for (var i=0;i<names.length;i++){
+        var idx = header.indexOf(normHeader(names[i]));
+        if (idx !== -1) return idx;
+      }
+      return -1;
+    }
     var C = {
-      iban: col("IBAN/BBAN"), munt: col("Munt"), volgnr: col("Volgnr"),
-      datum: col("Datum"), bedrag: col("Bedrag"), saldo: col("Saldo na trn"),
-      cIban: col("Tegenrekening IBAN/BBAN"), cName: col("Naam tegenpartij"),
-      code: col("Code"), ref: col("Transactiereferentie"),
-      o1: col("Omschrijving-1"), o2: col("Omschrijving-2"), o3: col("Omschrijving-3")
+      iban: col(["IBAN/BBAN"]), munt: col(["Munt","Ccy"]), volgnr: col(["Volgnr","Seq No"]),
+      datum: col(["Datum","Date"]), bedrag: col(["Bedrag","Amount"]), saldo: col(["Saldo na trn","Bal After Bkng"]),
+      cIban: col(["Tegenrekening IBAN/BBAN","Counterpty IBAN/BBAN"]), cName: col(["Naam tegenpartij","Name Counterpty"]),
+      code: col(["Code"]), ref: col(["Transactiereferentie","Transaction Reference"]),
+      o1: col(["Omschrijving-1","Description-1"]), o2: col(["Omschrijving-2","Description-2"]), o3: col(["Omschrijving-3","Description-3"])
     };
     var missing = ["iban","volgnr","datum","bedrag"].filter(function(k){ return C[k] === -1; });
     if (missing.length){
       return { rows:[], errors:["This does not look like a Rabobank CSV export — missing column(s): " +
-        missing.map(function(k){ return {iban:"IBAN/BBAN",volgnr:"Volgnr",datum:"Datum",bedrag:"Bedrag"}[k]; }).join(", ") +
-        ". In Rabobank online banking choose Download → CSV (kommagescheiden)."] };
+        missing.map(function(k){ return {iban:"IBAN/BBAN",volgnr:"Volgnr / Seq No",datum:"Datum / Date",bedrag:"Bedrag / Amount"}[k]; }).join(", ") +
+        ". In Rabobank online banking choose Download → CSV (kommagescheiden / comma separated)."] };
     }
     function get(r, i){ return i === -1 ? "" : String(r[i] == null ? "" : r[i]).trim(); }
     var out = [], errors = [];
@@ -316,7 +323,7 @@
       if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)){ errors.push("Line " + line + ": invalid date \"" + datum + "\" — skipped."); continue; }
       if (cents == null){ errors.push("Line " + line + ": could not read amount \"" + get(r, C.bedrag) + "\" — skipped."); continue; }
       if (munt.toUpperCase() !== "EUR"){ errors.push("Line " + line + ": non-EUR currency " + munt + " — skipped."); continue; }
-      var desc = [get(r,C.o1), get(r,C.o2), get(r,C.o3)].filter(Boolean).join(" ").trim();
+      var desc = [get(r,C.o1), get(r,C.o2), get(r,C.o3)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
       out.push({
         account_iban: get(r, C.iban),
         sequence_no: Number(volgnr),

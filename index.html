@@ -227,6 +227,14 @@
   // settle income counted elsewhere) are shown in lists but never hit profit math.
   function catExcluded(id){ var c = catById(id); return !!(c && c.exclude_from_pl); }
   function inPL(t){ return !catExcluded(t.category_id); }
+  // Flag rows that need a human decision after import: uncategorized, or a Friendship
+  // pool invoice whose covered month isn't set yet (pool bills are paid with a variable lag).
+  function needsReview(t){
+    if (t.category_id == null) return true;
+    var c = catById(t.category_id);
+    if (c && c.name === "Pool rental" && /friendship/i.test(t.counterparty_name || "") && !t.report_date) return true;
+    return false;
+  }
   function sortedCats(){
     return data.categories.slice().sort(function(a,b){
       var ra = a.exclude_from_pl ? 2 : a.kind==="income" ? 0 : 1;
@@ -281,14 +289,30 @@
     if (!/^\d+$/.test(intPart)) return null;
     return Number(intPart) * 100 + (fracPart ? Number((fracPart + "00").slice(0,2)) : 0);
   }
+  // Eversports "Gross Price": US style — dot decimal, comma thousands ("1,732.55", "34.95", "-20").
+  // Blank (video recordings have no price) returns null so the row is skipped.
+  function parsePriceCents(s){
+    if (s == null) return null;
+    s = String(s).trim();
+    if (!s) return null;
+    var sign = 1;
+    if (s[0] === "-"){ sign = -1; s = s.slice(1); }
+    else if (s[0] === "+"){ s = s.slice(1); }
+    s = s.replace(/,/g, "");
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
+    var parts = s.split(".");
+    return sign * (Number(parts[0]) * 100 + (parts[1] ? Number((parts[1] + "00").slice(0,2)) : 0));
+  }
 
   // ---------- CSV parsing ----------
   function decodeCSVFile(buf){
     try{ return new TextDecoder("utf-8", { fatal:true }).decode(buf); }
     catch(e){ return new TextDecoder("windows-1252").decode(buf); }
   }
-  // RFC-4180 state machine: quoted fields, "" escapes, CR/LF/CRLF
-  function parseCSV(text){
+  // RFC-4180 state machine: quoted fields, "" escapes, CR/LF/CRLF.
+  // delim defaults to comma (Rabobank); Eversports exports use ";".
+  function parseCSV(text, delim){
+    delim = delim || ",";
     var rows = [], row = [], field = "", inQ = false, i = 0, ch;
     while (i < text.length){
       ch = text[i];
@@ -300,7 +324,7 @@
         field += ch; i++; continue;
       }
       if (ch === '"'){ inQ = true; i++; continue; }
-      if (ch === ","){ row.push(field); field = ""; i++; continue; }
+      if (ch === delim){ row.push(field); field = ""; i++; continue; }
       if (ch === "\r"){ i++; continue; }
       if (ch === "\n"){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
       field += ch; i++;
@@ -365,6 +389,58 @@
       });
     }
     return { rows: out, errors: errors };
+  }
+
+  // ---------- month helpers ----------
+  function monthLastDayISO(ym){ // "YYYY-MM" -> "YYYY-MM-DD" (last day)
+    var y = Number(ym.slice(0,4)), m = Number(ym.slice(5,7));
+    return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2,"0");
+  }
+  function monthLabel(ym){ return MONTHS[Number(ym.slice(5,7)) - 1] + " " + ym.slice(0,4); }
+  // Off-season: purchases invoiced in July/August are for the September season → count in September.
+  function preseasonTarget(ym){
+    var m = ym.slice(5,7);
+    return (m === "07" || m === "08") ? ym.slice(0,4) + "-09" : null;
+  }
+
+  // ---------- Eversports revenue import ----------
+  // Sniff which kind of CSV was dropped from its header line.
+  function detectFileKind(text){
+    var first = (text.split(/\r?\n/)[0] || "").toLowerCase();
+    if (first.indexOf("gross price") !== -1 || first.indexOf("invoice number") !== -1) return "eversports";
+    if (first.indexOf("iban/bban") !== -1 || first.indexOf("seq no") !== -1 || first.indexOf("volgnr") !== -1) return "rabobank";
+    return null;
+  }
+  // Sum gross revenue per invoice month from the Eversports "revenue" export.
+  function parseEversportsCSV(text){
+    var rows = parseCSV(text, ";");
+    if (!rows.length) return { data:{ months:[], total_cents:0, lineCount:0 }, errors:["File is empty."] };
+    var header = rows[0].map(normHeader);
+    function col(name){ return header.indexOf(normHeader(name)); }
+    var C = { num: col("Invoice Number"), date: col("Invoice Date"), gross: col("Gross Price") };
+    if (C.date === -1 || C.gross === -1){
+      return { data:{ months:[], total_cents:0, lineCount:0 },
+        errors:["This doesn't look like an Eversports revenue export (missing Invoice Date / Gross Price). In Eversports, export the revenue report as CSV."] };
+    }
+    function get(r,i){ return i === -1 ? "" : String(r[i] == null ? "" : r[i]).trim(); }
+    var byMonth = {}, total = 0, lineCount = 0;
+    for (var li = 1; li < rows.length; li++){
+      var r = rows[li], num = get(r, C.num), date = get(r, C.date);
+      if (/^sum/i.test(num) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;   // skip the "Sum …" footer + malformed rows
+      var cents = parsePriceCents(get(r, C.gross));
+      if (cents == null) continue;                                            // blank price (free recordings) → no revenue
+      var ym = date.slice(0,7);
+      byMonth[ym] = (byMonth[ym] || 0) + cents;
+      total += cents; lineCount++;
+    }
+    var months = Object.keys(byMonth).sort().map(function(ym){
+      var countsIn = preseasonTarget(ym) || ym;
+      var existing = findEarnedRow(ym);
+      return { month: ym, gross_cents: byMonth[ym], countsIn: countsIn,
+               existing: existing, existingCents: existing ? existing.amount_cents : null,
+               include: !existing || byMonth[ym] >= existing.amount_cents };
+    });
+    return { data:{ months: months, total_cents: total, lineCount: lineCount }, errors:[] };
   }
 
   // ---------- rule engine ----------
@@ -532,15 +608,94 @@
     alert("Categorized " + n + " transaction" + (n===1?"":"s") + " using your rules.");
   }
 
+  // ---------- Eversports earned-revenue rows (one manual row per invoice month) ----------
+  function lessonFeesCatId(){
+    var c = data.categories.find(function(c){ return c.name === "Lesson fees"; });
+    return c ? c.id : null;
+  }
+  // The source invoice month of an earned row, from its description: the "YYYY-MM" marker
+  // new rows carry, or — for the one legacy pre-season row written before markers existed —
+  // the "…(bought in <Month>…)" phrase combined with the year it counts in.
+  function everSourceMonth(t){
+    var m = /(20\d\d-\d\d)/.exec(t.description || "");
+    if (m) return m[1];
+    var mn = /bought in (\w+)/i.exec(t.description || "");
+    if (mn){
+      var idx = MONTHS.map(function(x){ return x.toLowerCase(); }).indexOf(mn[1].slice(0,3).toLowerCase());
+      if (idx !== -1) return (t.report_date || t.booking_date).slice(0,4) + "-" + String(idx+1).padStart(2,"0");
+    }
+    return null;
+  }
+  // Find the existing "Eversports (earned)" row for a source month, so re-imports update it
+  // rather than duplicating. Matched purely by source month — never by which month it counts in,
+  // so two summer months both deferring to September can't collide on one row.
+  function findEarnedRow(sourceMonth){
+    return data.transactions.filter(function(t){
+      return t.source === "manual" && t.counterparty_name === "Eversports (earned)" && everSourceMonth(t) === sourceMonth;
+    })[0] || null;
+  }
+  function earnedRow(sourceMonth, cents, countsInMonth){
+    var deferred = countsInMonth !== sourceMonth;
+    return {
+      booking_date: monthLastDayISO(sourceMonth),
+      amount_cents: cents,
+      counterparty_name: "Eversports (earned)",
+      description: deferred
+        ? "Eversports earned " + sourceMonth + " — " + monthLabel(countsInMonth) + " pre-season"
+        : "Eversports earned " + sourceMonth + " (revenue report)",
+      category_id: lessonFeesCatId(),
+      report_date: deferred ? countsInMonth + "-01" : null,
+      account_iban: "MANUAL", sequence_no: null, source: "manual", currency: "EUR"
+    };
+  }
+  async function doEversportsImport(){
+    var st = importState;
+    if (!st || st.kind !== "eversports" || !st.ev || st.busy) return;
+    if (lessonFeesCatId() == null){ alert('Add a "Lesson fees" category first (in Settings).'); return; }
+    st.busy = true; render();
+    var chosen = st.ev.months.filter(function(m){ return m.include; });
+    var wrote = 0, error = null;
+    for (var i = 0; i < chosen.length && !error; i++){
+      var mo = chosen[i];
+      var existing = findEarnedRow(mo.month);
+      var row = earnedRow(mo.month, mo.gross_cents, mo.countsIn);
+      var r = existing ? await sb.from("transactions").update(row).eq("id", existing.id)
+                       : await sb.from("transactions").insert(row);
+      if (r.error){ error = r.error; break; }
+      wrote++;
+    }
+    if (error){
+      st.busy = false;
+      st.errors = (st.errors || []).concat(["Save failed: " + error.message]);
+      render();
+      return;
+    }
+    await sb.from("imports").insert({ filename: st.filename, added_count: wrote, skipped_count: st.ev.months.length - wrote });
+    try{ await loadAll(); }catch(e){ console.warn(e); }
+    st.busy = false;
+    st.result = { kind:"eversports", wrote: wrote };
+    st.ev = null;
+    render();
+  }
+
   // ---------- import ----------
   async function handleFile(file){
     if (!file) return;
-    importState = { filename: file.name, rows: [], errors: [], busy: false, result: null };
+    importState = { filename: file.name, kind: null, rows: [], errors: [], ev: null, busy: false, result: null };
     try{
-      var buf = await file.arrayBuffer();
-      var parsed = parseRabobankCSV(decodeCSVFile(buf));
-      importState.rows = parsed.rows;
-      importState.errors = parsed.errors;
+      var text = decodeCSVFile(await file.arrayBuffer());
+      var kind = detectFileKind(text);
+      if (kind === "eversports"){
+        importState.kind = "eversports";
+        var pe = parseEversportsCSV(text);
+        importState.ev = pe.data;
+        importState.errors = pe.errors;
+      } else {
+        importState.kind = "rabobank";
+        var parsed = parseRabobankCSV(text);
+        importState.rows = parsed.rows;
+        importState.errors = parsed.errors;
+      }
     }catch(e){
       importState.errors = ["Could not read file: " + (e.message || e)];
     }
@@ -579,7 +734,7 @@
     try{ await loadAll(); }catch(e){ console.warn(e); }
     var uncategorized = data.transactions.filter(function(t){ return t.category_id == null; }).length;
     importState.busy = false;
-    importState.result = { added: added, skipped: skipped, uncategorized: uncategorized };
+    importState.result = { kind:"rabobank", added: added, skipped: skipped, uncategorized: uncategorized };
     importState.rows = [];
     render();
   }
@@ -652,10 +807,14 @@
     // hard login gate: nothing renders without a session
     if (!session){ return renderLogin(); }
 
+    var reviewCount = data.transactions.filter(needsReview).length;
     APP.append(h("nav",{class:"tabs"},
       ["dashboard","transactions","import","settings"].map(function(n){
-        return h("button",{class: view.name===n ? "active" : "", onclick:function(){ nav(n); }},
+        var btn = h("button",{class: view.name===n ? "active" : "", onclick:function(){ nav(n); }},
           n.charAt(0).toUpperCase() + n.slice(1));
+        if (n === "import" && reviewCount)
+          btn.append(h("span",{class:"badge warn",style:{marginLeft:"6px"}}, String(reviewCount)));
+        return btn;
       })
     ));
 
@@ -1091,16 +1250,33 @@
 
   // ----- import -----
   function renderImport(){
+    // review queue first — things that still need a human decision after an import
+    var review = data.transactions.filter(needsReview);
+    if (review.length){
+      var rv = h("div",{class:"card"},
+        h("h2",null,"Needs review (" + review.length + ")"),
+        h("p",{class:"muted small"},
+          "Set a category, and for Friendship pool invoices pick the month they cover (the “counts in” box)."));
+      review.slice(0, 60).forEach(function(t){ rv.append(txRow(t)); });
+      if (review.length > 60) rv.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
+        "…and " + (review.length-60) + " more — see the Transactions tab."));
+      APP.append(rv);
+    }
+
     APP.append(h("div",{class:"card"},
-      h("h2",null,"Import Rabobank transactions"),
-      h("p",{class:"muted small"},
-        "In Rabobank online banking: Payments → Transactions → Download → ",
-        h("b",null,"CSV (kommagescheiden)"),
-        ". Pick any period — re-uploading overlapping exports is safe, duplicates are skipped automatically.")));
+      h("h2",null,"Import data"),
+      h("p",{class:"muted small"},"Drop a file below — the app recognises which report it is:"),
+      h("ul",{class:"muted small",style:{margin:"6px 0 0",paddingLeft:"18px"}},
+        h("li",null, h("b",null,"Rabobank CSV")," (Payments → Download → CSV kommagescheiden) — bank costs & receipts. Overlapping exports are safe; duplicates are skipped."),
+        h("li",null, h("b",null,"Eversports revenue CSV")," — the app totals each invoice month and books your “Eversports (earned)” income for you."))));
 
     var st = importState;
 
-    if (st && st.result){
+    // result banners
+    if (st && st.result && st.result.kind === "eversports"){
+      APP.append(h("div",{class:"banner ok"},
+        "Saved " + st.result.wrote + " Eversports revenue row" + (st.result.wrote===1?"":"s") + " from " + st.filename + "."));
+    } else if (st && st.result){
       var res = st.result;
       APP.append(h("div",{class:"banner ok"},
         "Imported " + st.filename + ": added " + res.added + ", skipped " + res.skipped + " duplicate" + (res.skipped===1?"":"s") + "."));
@@ -1115,12 +1291,12 @@
       }
     }
 
-    // dropzone
+    // dropzone (both file types)
     var fileInput = h("input",{type:"file",accept:".csv,text/csv",style:{display:"none"}});
     fileInput.addEventListener("change", function(){ handleFile(fileInput.files[0]); fileInput.value = ""; });
     var dz = h("div",{class:"dropzone"},
       h("div",{style:{fontSize:"1.6rem"}},"📄"),
-      h("div",null, h("b",null,"Drop your Rabobank CSV here")," or click to choose a file"));
+      h("div",null, h("b",null,"Drop your Rabobank or Eversports CSV here")," or click to choose a file"));
     dz.addEventListener("click", function(){ fileInput.click(); });
     dz.addEventListener("dragover", function(e){ e.preventDefault(); dz.classList.add("over"); });
     dz.addEventListener("dragleave", function(){ dz.classList.remove("over"); });
@@ -1140,9 +1316,68 @@
       APP.append(eb);
     }
 
-    if (!st.rows.length || st.result) return;
+    if (st.result) return;
 
-    // preview
+    // ----- Eversports revenue preview -----
+    if (st.kind === "eversports" && st.ev){
+      var ev = st.ev;
+      if (!ev.months.length) return;
+      var pv2 = h("div",{class:"card",style:{marginTop:"14px"}},
+        h("h2",null,"Eversports revenue — " + st.filename),
+        h("p",{class:"small muted"},
+          ev.lineCount + " invoice lines · total " + fmtEUR(ev.total_cents) +
+          " · grouped into " + ev.months.length + " month" + (ev.months.length===1?"":"s")));
+      var tbl2 = h("table",{class:"pl-table"},
+        h("thead",null,h("tr",null,
+          h("th",{style:{textAlign:"center"}},"Use"), h("th",null,"Invoice month"),
+          h("th",null,"Revenue"), h("th",{style:{textAlign:"left"}},"Counts in"), h("th",{style:{textAlign:"left"}},"Status"))));
+      var tb2 = h("tbody");
+      ev.months.forEach(function(mo){
+        var chk = h("input",{type:"checkbox"}); chk.checked = mo.include;
+        chk.addEventListener("change", function(){ mo.include = chk.checked; });
+        var sep = preseasonTarget(mo.month), countsCell;
+        if (sep){
+          var sel = h("select",{class:"small"},
+            h("option",{value:mo.month}, monthLabel(mo.month) + " (in-season)"),
+            h("option",{value:sep}, monthLabel(sep) + " (pre-season)"));
+          sel.value = mo.countsIn;
+          sel.addEventListener("change", function(){
+            mo.countsIn = sel.value;
+            mo.existing = findEarnedRow(mo.month);
+            mo.existingCents = mo.existing ? mo.existing.amount_cents : null;
+            mo.include = !mo.existing || mo.gross_cents >= mo.existing.amount_cents;
+            render();
+          });
+          countsCell = sel;
+        } else {
+          countsCell = h("span",{class:"small muted"}, monthLabel(mo.month));
+        }
+        var status, warn = false;
+        if (!mo.existing) status = "new row";
+        else if (mo.gross_cents === mo.existingCents) status = "no change";
+        else if (mo.gross_cents < mo.existingCents){ status = "⚠ below current " + fmtEUR(mo.existingCents) + " — partial export?"; warn = true; }
+        else status = "update " + fmtEUR(mo.existingCents) + " → " + fmtEUR(mo.gross_cents);
+        tb2.append(h("tr",null,
+          h("td",{style:{textAlign:"center"}}, chk),
+          h("td",null, monthLabel(mo.month)),
+          h("td",null, fmtEUR(mo.gross_cents)),
+          h("td",{style:{textAlign:"left"}}, countsCell),
+          h("td",{class:"small", style: warn ? {color:"var(--warn)"} : null}, status)
+        ));
+      });
+      tbl2.append(tb2);
+      pv2.append(h("div",{class:"scroll-x"}, tbl2));
+      pv2.append(h("p",{class:"tiny muted",style:{marginTop:"8px"}},
+        "“Pre-season” = summer purchases for the September season; they count in September, not the month bought. Untick a month to skip it (e.g. a partial export that would lower a month you've already booked)."));
+      pv2.append(h("div",{class:"row",style:{marginTop:"12px"}},
+        h("button",{class:"primary", disabled: st.busy, onclick:doEversportsImport}, st.busy ? "Saving…" : "Save revenue"),
+        h("button",{class:"ghost", disabled: st.busy, onclick:function(){ importState = null; render(); }},"Cancel")));
+      APP.append(pv2);
+      return;
+    }
+
+    // ----- Rabobank transactions preview -----
+    if (!st.rows.length) return;
     var rules = sortedRules();
     var withCat = st.rows.map(function(t){
       var r = matchRule(t, rules);

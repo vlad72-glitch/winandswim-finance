@@ -114,6 +114,13 @@
   .preview-table th,.preview-table td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
   .preview-table th{color:var(--muted);font-weight:600;}
   .scroll-x{overflow-x:auto;}
+  /* readable per-period expense breakdown (no horizontal scroll) */
+  .exp-table{margin-top:8px;}
+  .exp-table td.share,.exp-table th.share{text-align:left;width:46%;}
+  .bar-wrap{display:flex;align-items:center;gap:8px;}
+  .bar-track{flex:1;height:8px;min-width:36px;background:var(--line);border-radius:999px;overflow:hidden;}
+  .bar-fill{height:100%;background:var(--viz-expense);}
+  .bar-pct{width:38px;text-align:right;color:var(--muted);font-size:.78rem;}
   @media (max-width:560px){
     .tx-row{flex-wrap:wrap;}
     .tx-amt{width:auto;}
@@ -515,6 +522,42 @@
     }
     return items;
   }
+  // Full (uncollapsed) expense breakdown for a set of transactions — every category, biggest first.
+  function expenseBreakdownFull(txs){
+    var by = {};
+    txs.forEach(function(t){
+      if (t.amount_cents >= 0 || !inPL(t)) return;
+      var k = t.category_id == null ? "null" : String(t.category_id);
+      by[k] = (by[k] || 0) + (-t.amount_cents);
+    });
+    return Object.keys(by).map(function(k){
+      return { label: k === "null" ? "Uncategorized" : catName(Number(k)), total: by[k] };
+    }).sort(function(a,b){ return b.total - a.total; });
+  }
+  // Readable expense table (Expense | Amount | Share-bar) for the selected period — reads top-to-bottom, no side scroll.
+  function expenseTable(txs){
+    var items = expenseBreakdownFull(txs);
+    if (!items.length) return h("div",{class:"empty"},"No expenses in this period.");
+    var grand = items.reduce(function(s,x){ return s + x.total; }, 0);
+    return h("table",{class:"pl-table exp-table"},
+      h("thead",null,h("tr",null,
+        h("th",null,"Expense"), h("th",null,"Amount"), h("th",{class:"share"},"Share"))),
+      h("tbody",null,
+        items.map(function(x){
+          var pct = grand ? x.total / grand * 100 : 0;
+          return h("tr",null,
+            h("td",null, x.label),
+            h("td",null, fmtEUR(x.total)),
+            h("td",{class:"share"}, h("div",{class:"bar-wrap"},
+              h("div",{class:"bar-track"}, h("div",{class:"bar-fill", style:"width:" + pct.toFixed(1) + "%"})),
+              h("span",{class:"bar-pct"}, pct.toFixed(0) + "%"))));
+        }),
+        h("tr",{class:"total"},
+          h("td",null,"Total"),
+          h("td",null, fmtEUR(grand)),
+          h("td",{class:"share"},""))
+      ));
+  }
 
   // ---------- supabase calls ----------
   async function fetchAllTransactions(){
@@ -904,6 +947,7 @@
       bd.append(h("div",{class:"empty"},"No expenses in this period."));
     } else {
       bd.append(h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-categories"})));
+      bd.append(expenseTable(periodTx));
     }
     APP.append(bd);
 
@@ -937,7 +981,10 @@
         h("div",{class:"section-label"},"Month by month — " + filters.year),
         h("div",{class:"scroll-x"}, plt)));
 
-      // ---- expense sources per month (category × month matrix) ----
+      // ---- expense sources per month (category × month matrix) — whole-year view only ----
+      // In a single-month view the clean "Expenses by category" table above already covers it,
+      // so we skip this wide grid (that's what forced horizontal scrolling to reach later months).
+      if (filters.month == null){
       var rowsByCat = {};   // catKey -> { label, months: [12], total }
       txInYear(filters.year).forEach(function(t){
         if (t.amount_cents >= 0 || !inPL(t)) return;
@@ -982,6 +1029,7 @@
         APP.append(h("div",{class:"card"},
           h("div",{class:"section-label"},"Where the money goes — expenses per source, " + filters.year),
           h("div",{class:"scroll-x"}, xt)));
+      }
       }
     }
 

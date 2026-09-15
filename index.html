@@ -114,6 +114,16 @@
   .preview-table th,.preview-table td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
   .preview-table th{color:var(--muted);font-weight:600;}
   .scroll-x{overflow-x:auto;}
+  /* pool rent estimator */
+  .pool-note{font-size:.8rem;color:var(--muted);margin-top:9px;}
+  .pool-skip{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .poolrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  @media (max-width:560px){
+    .pl-table .col-detail{display:none;}
+    .pool-table th,.pool-table td{padding:5px 4px;font-size:.8rem;}
+  }
+  .pl-table tr.now td{background:var(--accent-bg);}
+  .pl-table td.muted{color:var(--muted);}
   /* readable per-period expense breakdown (no horizontal scroll) */
   .exp-table{margin-top:8px;}
   .exp-table td.share,.exp-table th.share{text-align:left;width:46%;}
@@ -559,6 +569,148 @@
       ));
   }
 
+  // ---------- pool rent estimator ----------
+  // Source of truth: "Bijlage 2" of the Gebruikersovereenkomst with Stichting Friendship
+  // Sports Centre (signed 27-08-2026, sportjaar 2026/2027). Its tariffs are per lane per
+  // hour and EXCLUDE btw. The contract's own "Bedrag" column is exactly lanes x hours x
+  // the per-lane rate (Mon/Thu 2 x EUR 56,20 = EUR 112,40; Sat 2h = EUR 224,80), so the
+  // estimate below reproduces the contract line for line.
+  var POOL_KEY = "wsfin.pool.v1";
+  var DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var DOW_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var POOL_CONTRACT = {
+    season: "2026 / 2027",
+    pool: "Wedstrijdbad",
+    start: "2026-09-03",          // donderdag 03 september 2026
+    end:   "2027-07-11",          // zondag 11 juli 2027
+    laneRateCents: 5620,          // EUR 56,20 per baan per uur, excl. btw (geindexeerd)
+    vatPct: 0,                    // contract tariffs are excl. btw — see the note on the tab
+    slots: [
+      { dow:1, time:"18:30–19:30", hours:1, lanes:2, ref:"22157" },
+      { dow:4, time:"19:30–20:30", hours:1, lanes:2, ref:"22155" },
+      { dow:6, time:"16:00–18:00", hours:2, lanes:2, ref:"22156" }
+    ],
+    // School holidays are swum through — except the Christmas break, which is struck out
+    // in the bijlage's "wordt er wel gezwommen" list.
+    breaks: [
+      { from:"2026-12-19", to:"2027-01-03", label:"Kerstvakantie — no swimming" }
+    ],
+    // Days the centre itself is shut.
+    closed: [
+      { date:"2026-12-25", label:"1e kerstdag" },
+      { date:"2026-12-26", label:"2e kerstdag" },
+      { date:"2027-01-01", label:"Nieuwjaarsdag" },
+      { date:"2027-03-28", label:"1e Paasdag" },
+      { date:"2027-03-29", label:"2e Paasdag" },
+      { date:"2027-04-27", label:"Koningsdag" },
+      { date:"2027-05-06", label:"Hemelvaartsdag" },
+      { date:"2027-05-16", label:"1e Pinksterdag" },
+      { date:"2027-05-17", label:"2e Pinksterdag" }
+    ],
+    // Holidays we DO swim through — reference only, they cost the normal rate.
+    swimHolidays: [
+      { from:"2026-10-10", to:"2026-10-18", label:"Herfstvakantie" },
+      { from:"2027-02-20", to:"2027-02-28", label:"Voorjaarsvakantie" },
+      { from:"2027-04-24", to:"2027-05-02", label:"Meivakantie" },
+      { from:"2027-07-10", to:"2027-08-22", label:"Zomervakantie" }
+    ]
+  };
+
+  var poolCfg = null, poolEditing = false;
+  function poolClone(o){ return JSON.parse(JSON.stringify(o)); }
+  function getPoolCfg(){
+    if (poolCfg) return poolCfg;
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(POOL_KEY) || "null"); } catch(e){}
+    poolCfg = (saved && saved.start && saved.end && saved.slots && saved.slots.length)
+      ? saved : poolClone(POOL_CONTRACT);
+    return poolCfg;
+  }
+  function savePoolCfg(){ try { localStorage.setItem(POOL_KEY, JSON.stringify(poolCfg)); } catch(e){} }
+  function resetPoolCfg(){
+    poolCfg = poolClone(POOL_CONTRACT);
+    try { localStorage.removeItem(POOL_KEY); } catch(e){}
+  }
+  function poolCustomised(){ try { return !!localStorage.getItem(POOL_KEY); } catch(e){ return false; } }
+
+  function poolVat(cfg){ return Math.max(0, Number(cfg.vatPct) || 0); }
+  function poolGross(cents, cfg){ return cents + Math.round(cents * poolVat(cfg) / 100); }
+  function slotNet(s, cfg){
+    return Math.round((Number(s.hours)||0) * (Number(s.lanes)||0) * (Number(cfg.laneRateCents)||0));
+  }
+  function poolWeekNet(cfg){
+    return (cfg.slots || []).reduce(function(sum, s){ return sum + slotNet(s, cfg); }, 0);
+  }
+
+  // Walk the season one day at a time: a day is billed when it matches a booked slot and
+  // falls neither inside a no-swim break nor on the centre's closed list.
+  function poolPlan(cfg){
+    var out = { months:[], byMonth:{}, skipped:[], totalNet:0, totalHours:0, totalSessions:0 };
+    var t = Date.parse(cfg.start + "T00:00:00Z"), endT = Date.parse(cfg.end + "T00:00:00Z");
+    if (isNaN(t) || isNaN(endT) || t > endT) return out;
+    for (var guard = 0; t <= endT && guard < 2000; t += 86400000, guard++){
+      var d = new Date(t), iso = d.toISOString().slice(0,10), dow = d.getUTCDay();
+      var slots = (cfg.slots || []).filter(function(s){ return Number(s.dow) === dow; });
+      if (!slots.length) continue;
+      var brk  = (cfg.breaks || []).filter(function(b){ return iso >= b.from && iso <= b.to; })[0];
+      var shut = (cfg.closed || []).filter(function(c){ return c.date === iso; })[0];
+      if (brk || shut){
+        out.skipped.push({ date:iso, dow:dow, kind: brk ? "break" : "closed",
+                           why: brk ? brk.label : (shut.label || "centre closed"),
+                           savedCents: slots.reduce(function(s,x){ return s + slotNet(x, cfg); }, 0) });
+        continue;
+      }
+      var ym = iso.slice(0,7), m = out.byMonth[ym];
+      if (!m){ m = out.byMonth[ym] = { ym:ym, perDow:{}, sessions:0, hours:0, netCents:0 }; out.months.push(m); }
+      slots.forEach(function(s){
+        m.perDow[dow] = (m.perDow[dow] || 0) + 1;
+        m.sessions++;
+        m.hours += Number(s.hours) || 0;
+        m.netCents += slotNet(s, cfg);
+        out.totalSessions++;
+        out.totalHours += Number(s.hours) || 0;
+        out.totalNet += slotNet(s, cfg);
+      });
+    }
+    out.months.sort(function(a,b){ return a.ym < b.ym ? -1 : 1; });
+    return out;
+  }
+
+  // What the pool has actually cost, by the month each invoice counts in (report_date).
+  function poolActualByMonth(){
+    var ids = data.categories.filter(function(c){
+      return c.kind === "expense" && /pool|zwembad|baanhuur/i.test(c.name);
+    }).map(function(c){ return c.id; });
+    var out = {};
+    if (!ids.length) return out;
+    data.transactions.forEach(function(t){
+      if (ids.indexOf(t.category_id) === -1) return;
+      var ym = txDate(t).slice(0,7);
+      out[ym] = (out[ym] || 0) + (-t.amount_cents);
+    });
+    return out;
+  }
+
+  // Closed days / breaks round-trip through plain text so they stay editable without SQL.
+  function poolClosedToText(list){
+    return (list || []).map(function(c){ return c.date + "  " + (c.label || ""); }).join("\n");
+  }
+  function poolTextToClosed(s){
+    return String(s).split(/\r?\n/).map(function(l){
+      var m = l.trim().match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
+      return m ? { date:m[1], label:m[2].trim() } : null;
+    }).filter(Boolean);
+  }
+  function poolBreaksToText(list){
+    return (list || []).map(function(b){ return b.from + ".." + b.to + "  " + (b.label || ""); }).join("\n");
+  }
+  function poolTextToBreaks(s){
+    return String(s).split(/\r?\n/).map(function(l){
+      var m = l.trim().match(/^(\d{4}-\d{2}-\d{2})\s*\.\.\s*(\d{4}-\d{2}-\d{2})\s*(.*)$/);
+      return m ? { from:m[1], to:m[2], label:m[3].trim() } : null;
+    }).filter(Boolean);
+  }
+
   // ---------- supabase calls ----------
   async function fetchAllTransactions(){
     var all = [], from = 0, page = 1000;
@@ -852,7 +1004,7 @@
 
     var reviewCount = data.transactions.filter(needsReview).length;
     APP.append(h("nav",{class:"tabs"},
-      ["dashboard","transactions","import","settings"].map(function(n){
+      ["dashboard","pool","transactions","import","settings"].map(function(n){
         var btn = h("button",{class: view.name===n ? "active" : "", onclick:function(){ nav(n); }},
           n.charAt(0).toUpperCase() + n.slice(1));
         if (n === "import" && reviewCount)
@@ -861,6 +1013,7 @@
       })
     ));
 
+    if (view.name === "pool") return renderPool();
     if (view.name === "transactions") return renderTransactions();
     if (view.name === "import") return renderImport();
     if (view.name === "settings") return renderSettings();
@@ -1146,6 +1299,273 @@
       if (q && (t.counterparty_name + " " + t.description).toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
+  }
+
+  // ----- pool -----
+  function renderPool(){
+    var cfg  = getPoolCfg();
+    var plan = poolPlan(cfg);
+    var vat  = poolVat(cfg);
+    var actual = poolActualByMonth();
+    var thisYm = todayISO().slice(0,7);
+
+    // weekday columns follow the booked slots, Monday first
+    var dows = [];
+    (cfg.slots || []).forEach(function(s){
+      var d = Number(s.dow);
+      if (dows.indexOf(d) === -1) dows.push(d);
+    });
+    dows.sort(function(a,b){ return ((a+6)%7) - ((b+6)%7); });
+
+    var seasonNet   = plan.totalNet;
+    var seasonGross = poolGross(seasonNet, cfg);
+    var invoiced    = plan.months.reduce(function(s,m){ return s + (actual[m.ym] || 0); }, 0);
+    var thisMonth   = plan.byMonth[thisYm];
+    // Bills run 1-3 months late, so "still to come" is the whole season minus whatever
+    // has already been invoiced — not just the months that are still in the future.
+    var ahead = seasonGross - invoiced;
+
+    function tile(lbl, val, cls, sub){
+      return h("div",{class:"tile"},
+        h("div",{class:"lbl"}, lbl),
+        h("div",{class:"val " + (cls || "")}, val),
+        h("div",{class:"sub"}, sub));
+    }
+    APP.append(h("div",{class:"tiles"},
+      tile("This month", thisMonth ? fmtEUR(poolGross(thisMonth.netCents, cfg)) : "—",
+        "", thisMonth ? monthLabel(thisYm) + " · " + thisMonth.sessions + " sessions · " + thisMonth.hours + "h"
+                      : "outside the season"),
+      tile("Season total", fmtEUR(seasonGross), "",
+        plan.totalHours + " pool hours · " + plan.totalSessions + " sessions"),
+      tile("Invoiced so far", fmtEUR(invoiced), "",
+        invoiced ? "booked to season months" : "no pool invoices booked yet"),
+      tile("Still to come", fmtEUR(ahead), "",
+        "season total minus invoiced")
+    ));
+
+    if (!plan.months.length){
+      APP.append(h("div",{class:"card empty"},
+        "No pool sessions fall inside the season dates. Check the season settings below."));
+      APP.append(renderPoolEditor(cfg));
+      return;
+    }
+
+    // ---- what we book every week ----
+    var weekNet = poolWeekNet(cfg);
+    var sched = h("table",{class:"pl-table pool-table"},
+      h("thead",null,h("tr",null,
+        h("th",null,"Day"), h("th",null,"Time"), h("th",{class:"col-detail"},"Lanes"),
+        h("th",{class:"col-detail"},"Hours"), h("th",null,"Per session"))),
+      h("tbody",null,
+        (cfg.slots || []).map(function(s){
+          return h("tr",null,
+            h("td",null, DOW_NAMES[Number(s.dow)]),
+            h("td",null, s.time || "—"),
+            h("td",{class:"col-detail"}, String(s.lanes)),
+            h("td",{class:"col-detail"}, String(s.hours)),
+            h("td",null, fmtEUR(poolGross(slotNet(s, cfg), cfg))));
+        }),
+        h("tr",{class:"total"},
+          h("td",null,"Full week"),
+          h("td",null,""), h("td",{class:"col-detail"},""),
+          h("td",{class:"col-detail"}, String((cfg.slots||[]).reduce(function(s,x){ return s + (Number(x.hours)||0); }, 0))),
+          h("td",null, fmtEUR(poolGross(weekNet, cfg))))
+      ));
+    var refs = (cfg.slots || []).map(function(s){ return s.ref; }).filter(Boolean);
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Booked hours — " + cfg.pool + ", season " + cfg.season),
+      h("div",{class:"scroll-x"}, sched),
+      h("div",{class:"pool-note"},
+        "EUR " + (cfg.laneRateCents/100).toFixed(2).replace(".",",") + " per lane per hour" +
+        (vat ? ", plus " + vat + "% btw" : ", excl. btw (contract tariff)") +
+        " · " + fmtDate(cfg.start) + " – " + fmtDate(cfg.end) +
+        (refs.length ? " · reservations " + refs.map(function(r){ return "#" + r; }).join(", ") : "") + ".")));
+
+    // ---- month by month ----
+    var body = plan.months.map(function(m){
+      var est = poolGross(m.netCents, cfg);
+      var act = actual[m.ym] || 0;
+      var diff = act - est;
+      return h("tr",{class: m.ym === thisYm ? "now" : ""},
+        h("td",null, monthLabel(m.ym)),
+        dows.map(function(d){ return h("td",{class:"col-detail"}, m.perDow[d] ? String(m.perDow[d]) : "·"); }),
+        h("td",{class:"col-detail"}, String(m.hours)),
+        h("td",null, fmtEUR(est)),
+        h("td",{class: act ? "" : "muted"}, act ? fmtEUR(act) : "—"),
+        h("td",{class: !act ? "muted" : (diff > 0 ? "amt-neg" : diff < 0 ? "amt-pos" : "")},
+          act ? (diff > 0 ? "+" : "") + fmtEUR(diff) : "—"));
+    });
+    var tbl = h("table",{class:"pl-table pool-table"},
+      h("thead",null,h("tr",null,
+        h("th",null,"Month"),
+        dows.map(function(d){ return h("th",{class:"col-detail"}, DOW_SHORT[d]); }),
+        h("th",{class:"col-detail"},"Hours"),
+        h("th",null,"Estimate"),
+        h("th",null,"Invoiced"),
+        h("th",null,"Diff"))),
+      h("tbody",null, body,
+        h("tr",{class:"total"},
+          h("td",null,"Season"),
+          dows.map(function(d){
+            var n = plan.months.reduce(function(s,m){ return s + (m.perDow[d] || 0); }, 0);
+            return h("td",{class:"col-detail"}, String(n));
+          }),
+          h("td",{class:"col-detail"}, String(plan.totalHours)),
+          h("td",null, fmtEUR(seasonGross)),
+          h("td",{class: invoiced ? "" : "muted"}, invoiced ? fmtEUR(invoiced) : "—"),
+          h("td",null,""))
+      ));
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"What the pool costs each month — season " + cfg.season),
+      h("div",{class:"scroll-x"}, tbl),
+      h("div",{class:"pool-note"},
+        "\"Estimate\" is the contract price for the sessions actually swum that month. " +
+        "\"Invoiced\" is what Friendship has billed for that month (the month the invoice covers, " +
+        "not when it was paid) — pool bills arrive 1–3 months late, so recent months read \"—\" " +
+        "until the invoice lands.")));
+
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Estimate vs invoiced"),
+      h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-pool"}))));
+
+    // ---- days we don't pay for ----
+    if (plan.skipped.length){
+      var saved = plan.skipped.reduce(function(s,x){ return s + poolGross(x.savedCents, cfg); }, 0);
+      APP.append(h("div",{class:"card"},
+        h("div",{class:"section-label"},"Sessions that fall away — " + fmtEUR(saved) + " not charged"),
+        h("div",{class:"pool-skip"},
+          plan.skipped.map(function(x){
+            return h("span",{class:"badge" + (x.kind === "break" ? "" : " warn")},
+              DOW_SHORT[x.dow] + " " + fmtDate(x.date) + " · " + x.why);
+          })),
+        h("div",{class:"pool-note"},
+          "School holidays are swum through; only the Christmas break and the centre's closing " +
+          "days drop out.")));
+    }
+
+    APP.append(renderPoolEditor(cfg));
+
+    // ---- chart ----
+    renderChart("chart-pool", {
+      type: "bar",
+      data: {
+        labels: plan.months.map(function(m){ return monthLabel(m.ym); }),
+        datasets: [
+          { label:"Estimate", data: plan.months.map(function(m){ return poolGross(m.netCents, cfg) / 100; }),
+            backgroundColor: VIZ.expense, borderRadius:4, categoryPercentage:.72, barPercentage:.9 },
+          { label:"Invoiced", data: plan.months.map(function(m){ return (actual[m.ym] || 0) / 100; }),
+            backgroundColor: VIZ.muted, borderRadius:4, categoryPercentage:.72, barPercentage:.9 }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:"index", intersect:false },
+        plugins:{ legend:{ position:"bottom", labels:{ color:"#52514e", usePointStyle:true, boxWidth:8 } },
+                  tooltip: tooltipEUR },
+        scales: baseScales(true)
+      }
+    });
+  }
+
+  function renderPoolEditor(cfg){
+    var card = h("div",{class:"card stack"});
+    card.append(h("div",{class:"poolrow"},
+      h("div",{class:"section-label",style:{flex:"1",margin:"0"}},"Season settings"),
+      poolCustomised() ? h("span",{class:"badge warn"},"edited") : h("span",{class:"badge"},"from contract"),
+      h("button",{class:"small", onclick:function(){ poolEditing = !poolEditing; render(); }},
+        poolEditing ? "Close" : "Adjust")));
+    if (!poolEditing){
+      card.append(h("div",{class:"small muted"},
+        "Rates, hours, holidays and closing days come from Bijlage 2 of the Friendship " +
+        "user agreement. Open this when the schedule changes or a new season is signed."));
+      return card;
+    }
+
+    var fStart = h("input",{type:"date",value:cfg.start});
+    var fEnd   = h("input",{type:"date",value:cfg.end});
+    var fRate  = h("input",{type:"text",value:(cfg.laneRateCents/100).toFixed(2).replace(".",","),
+                            style:{width:"110px"}});
+    var fVat   = h("select",null,
+      h("option",{value:"0"},"excl. btw (contract tariff)"),
+      h("option",{value:"9"},"+ 9% btw"),
+      h("option",{value:"21"},"+ 21% btw"));
+    fVat.value = String(poolVat(cfg));
+
+    card.append(h("div",{class:"poolrow"},
+      h("span",{class:"small muted",style:{width:"92px"}},"Season runs"), fStart, h("span",{class:"small muted"},"to"), fEnd));
+    card.append(h("div",{class:"poolrow"},
+      h("span",{class:"small muted",style:{width:"92px"}},"Per lane/hour"), fRate, fVat));
+
+    var slotRows = [];
+    var slotBox = h("div",null);
+    function slotLine(s){
+      var dsel = h("select",{class:"small"},
+        [1,2,3,4,5,6,0].map(function(d){ return h("option",{value:String(d)}, DOW_NAMES[d]); }));
+      dsel.value = String(s.dow);
+      var time  = h("input",{type:"text",class:"small",value:s.time || "",placeholder:"18:30–19:30",style:{width:"118px"}});
+      var lanes = h("input",{type:"number",class:"small",min:"0",step:"1",value:String(s.lanes),style:{width:"62px"}});
+      var hours = h("input",{type:"number",class:"small",min:"0",step:"0.5",value:String(s.hours),style:{width:"68px"}});
+      var rec = { dsel:dsel, time:time, lanes:lanes, hours:hours, ref:s.ref || "" };
+      slotRows.push(rec);
+      var line = h("div",{class:"editline"},
+        dsel, time,
+        h("span",{class:"tiny muted"},"lanes"), lanes,
+        h("span",{class:"tiny muted"},"hrs"), hours,
+        h("button",{class:"danger small", onclick:function(){
+          var i = slotRows.indexOf(rec); if (i > -1) slotRows.splice(i,1);
+          line.remove();
+        }},"✕"));
+      return line;
+    }
+    (cfg.slots || []).forEach(function(s){ slotBox.append(slotLine(s)); });
+    card.append(h("div",{class:"section-label",style:{marginTop:"6px"}},"Weekly slots"));
+    card.append(slotBox);
+    card.append(h("div",{class:"row"},
+      h("button",{class:"small", onclick:function(){
+        slotBox.append(slotLine({ dow:1, time:"", hours:1, lanes:2 }));
+      }},"+ Add slot")));
+
+    var fBreaks = h("textarea",{rows:"3",style:{width:"100%"},
+      placeholder:"2026-12-19..2027-01-03  Kerstvakantie"}, poolBreaksToText(cfg.breaks));
+    var fClosed = h("textarea",{rows:"6",style:{width:"100%"},
+      placeholder:"2026-12-25  1e kerstdag"}, poolClosedToText(cfg.closed));
+    card.append(h("div",{class:"section-label",style:{marginTop:"6px"}},"Weeks without swimming"));
+    card.append(h("div",{class:"tiny muted"},"One per line: from..to  label"));
+    card.append(fBreaks);
+    card.append(h("div",{class:"section-label",style:{marginTop:"6px"}},"Days the centre is closed"));
+    card.append(h("div",{class:"tiny muted"},"One per line: YYYY-MM-DD  label"));
+    card.append(fClosed);
+
+    card.append(h("div",{class:"poolrow"},
+      h("button",{class:"primary", onclick:function(){
+        var rate = parseUserAmount(fRate.value);
+        poolCfg = {
+          season: cfg.season, pool: cfg.pool,
+          start: fStart.value || cfg.start,
+          end:   fEnd.value   || cfg.end,
+          laneRateCents: rate == null ? cfg.laneRateCents : rate,
+          vatPct: Number(fVat.value) || 0,
+          slots: slotRows.map(function(r){
+            return { dow:Number(r.dsel.value), time:r.time.value.trim(),
+                     lanes:Number(r.lanes.value) || 0, hours:Number(r.hours.value) || 0, ref:r.ref };
+          }),
+          breaks: poolTextToBreaks(fBreaks.value),
+          closed: poolTextToClosed(fClosed.value),
+          swimHolidays: cfg.swimHolidays
+        };
+        savePoolCfg();
+        poolEditing = false;
+        render();
+      }},"Save"),
+      h("button",{class:"danger", onclick:function(){
+        if (!confirm("Put the schedule back to Bijlage 2 of the 2026/2027 agreement?")) return;
+        resetPoolCfg();
+        poolEditing = false;
+        render();
+      }},"Reset to contract")));
+    card.append(h("div",{class:"tiny muted"},
+      "Saved in this browser only — it doesn't touch the transaction database."));
+    return card;
   }
 
   function renderTransactions(){

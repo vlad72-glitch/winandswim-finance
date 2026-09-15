@@ -118,9 +118,25 @@
   .pool-note{font-size:.8rem;color:var(--muted);margin-top:9px;}
   .pool-skip{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
   .poolrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  /* break-even tracker */
+  .be-bar{position:relative;height:20px;background:var(--line);border-radius:7px;overflow:hidden;}
+  .be-bar.big{height:30px;border-radius:9px;}
+  .be-fill{height:100%;}
+  .be-fill.ok{background:var(--good);}
+  .be-fill.short{background:var(--bad);}
+  .be-mark{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);opacity:.5;}
+  .be-head{font-size:1.2rem;font-weight:700;margin:0 0 8px;}
+  .be-item{padding:10px 0;border-bottom:1px solid var(--line);}
+  .be-item:last-child{border-bottom:none;}
+  .be-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    font-variant-numeric:tabular-nums;margin-top:6px;}
+  .be-line .m{font-weight:600;font-size:.9rem;}
+  .be-line .g{font-weight:700;font-size:.9rem;}
+  .be-line.sub{font-size:.78rem;color:var(--muted);}
   @media (max-width:560px){
     .pl-table .col-detail{display:none;}
-    .pool-table th,.pool-table td{padding:5px 4px;font-size:.8rem;}
+    .pool-table th,.pool-table td,
+    .exp-table th,.exp-table td{padding:5px 4px;font-size:.8rem;}
   }
   .pl-table tr.now td{background:var(--accent-bg);}
   .pl-table td.muted{color:var(--muted);}
@@ -584,7 +600,7 @@
     start: "2026-09-03",          // donderdag 03 september 2026
     end:   "2027-07-11",          // zondag 11 juli 2027
     laneRateCents: 5620,          // EUR 56,20 per baan per uur, excl. btw (geindexeerd)
-    vatPct: 0,                    // contract tariffs are excl. btw — see the note on the tab
+    vatPct: 9,                    // bijlage tariffs are excl. btw; Friendship invoices add 9% (confirmed by Vlad, Sep 2026)
     slots: [
       { dow:1, time:"18:30–19:30", hours:1, lanes:2, ref:"22157" },
       { dow:4, time:"19:30–20:30", hours:1, lanes:2, ref:"22155" },
@@ -676,11 +692,14 @@
     return out;
   }
 
-  // What the pool has actually cost, by the month each invoice counts in (report_date).
-  function poolActualByMonth(){
-    var ids = data.categories.filter(function(c){
+  function poolCategoryIds(){
+    return data.categories.filter(function(c){
       return c.kind === "expense" && /pool|zwembad|baanhuur/i.test(c.name);
     }).map(function(c){ return c.id; });
+  }
+  // What the pool has actually cost, by the month each invoice counts in (report_date).
+  function poolActualByMonth(){
+    var ids = poolCategoryIds();
     var out = {};
     if (!ids.length) return out;
     data.transactions.forEach(function(t){
@@ -709,6 +728,50 @@
       var m = l.trim().match(/^(\d{4}-\d{2}-\d{2})\s*\.\.\s*(\d{4}-\d{2}-\d{2})\s*(.*)$/);
       return m ? { from:m[1], to:m[2], label:m[3].trim() } : null;
     }).filter(Boolean);
+  }
+
+  // ---------- break-even tracker ----------
+  // "Is the revenue keeping up with what this costs?" The pool half of the answer is known
+  // months before the invoice arrives, so a month's pool cost is the real invoice once it
+  // has landed and the contract estimate until then — never both, so a late invoice can't
+  // double-count. Everything else is what has actually been booked to that month.
+  function breakEven(year){
+    var cfg = getPoolCfg(), plan = poolPlan(cfg), poolIds = poolCategoryIds();
+    var y = String(year), rows = {};
+    function row(ym){
+      return rows[ym] || (rows[ym] = { ym:ym, revenue:0, other:0, poolActual:0, poolEst:0 });
+    }
+    data.transactions.forEach(function(t){
+      if (!inPL(t)) return;
+      var ym = txDate(t).slice(0,7);
+      if (ym.slice(0,4) !== y) return;
+      var r = row(ym);
+      if (t.amount_cents >= 0) r.revenue += t.amount_cents;
+      else if (poolIds.indexOf(t.category_id) > -1) r.poolActual += -t.amount_cents;
+      else r.other += -t.amount_cents;
+    });
+    plan.months.forEach(function(m){
+      if (m.ym.slice(0,4) === y) row(m.ym).poolEst = poolGross(m.netCents, cfg);
+    });
+    return Object.keys(rows).sort().map(function(ym){
+      var r = rows[ym];
+      r.estimated = r.poolActual <= 0 && r.poolEst > 0;
+      r.pool  = r.poolActual > 0 ? r.poolActual : r.poolEst;
+      r.costs = r.pool + r.other;
+      r.gap   = r.revenue - r.costs;
+      return r;
+    }).filter(function(r){ return r.revenue || r.costs; });
+  }
+
+  // Revenue fills the bar; the notch is break-even. Both are scaled to whichever is bigger,
+  // so a month that clears its costs shows the notch sitting inside a full green bar.
+  function beBar(revenue, costs, big){
+    var max = Math.max(revenue, costs, 1);
+    var ok = revenue >= costs;
+    return h("div",{class:"be-bar" + (big ? " big" : "")},
+      h("div",{class:"be-fill " + (ok ? "ok" : "short"),
+               style:{ width: Math.min(100, revenue / max * 100).toFixed(1) + "%" }}),
+      h("div",{class:"be-mark", style:{ left: Math.min(100, costs / max * 100).toFixed(1) + "%" }}));
   }
 
   // ---------- supabase calls ----------
@@ -1084,6 +1147,10 @@
         filters.month == null ? "" : "year: " + (ytd.margin == null ? "—" : ytd.margin.toFixed(1) + "%"))
     ));
 
+    // are we earning enough to cover the pool + everything else?
+    var beCard = breakEvenCard();
+    if (beCard) APP.append(beCard);
+
     // income vs expenses + profit (one shared EUR axis)
     APP.append(h("div",{class:"card"},
       h("div",{class:"section-label"},"Income vs expenses per month — " + filters.year),
@@ -1100,7 +1167,7 @@
       bd.append(h("div",{class:"empty"},"No expenses in this period."));
     } else {
       bd.append(h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-categories"})));
-      bd.append(expenseTable(periodTx));
+      bd.append(h("div",{class:"scroll-x"}, expenseTable(periodTx)));
     }
     APP.append(bd);
 
@@ -1301,6 +1368,89 @@
     });
   }
 
+  // ----- break-even card (dashboard) -----
+  // Deliberately scoped to months that have actually happened. Pool bills run 1-3 months
+  // late, so the plain Profit tile flatters recent months by simply missing them; this card
+  // fills those gaps from the contract estimate and says so. Months still in the future are
+  // a planning question, not a performance one — they live on the Pool tab.
+  function breakEvenCard(){
+    var all = breakEven(filters.year);
+    if (!all.length) return null;
+    var nowYm = todayISO().slice(0,7);
+    var done  = all.filter(function(r){ return r.ym <= nowYm; });
+    var ahead = all.filter(function(r){ return r.ym >  nowYm; });
+    var forecast = !done.length;            // a season year that hasn't started yet
+    var base = forecast ? all : done;
+
+    var scope, lbl;
+    if (filters.month == null){
+      scope = base;
+      lbl = String(filters.year) + (forecast ? " (forecast)" : (ahead.length ? " so far" : ""));
+    } else {
+      scope = all.filter(function(r){ return Number(r.ym.slice(5,7)) - 1 === filters.month; });
+      lbl = MONTHS[filters.month] + " " + filters.year +
+            (scope.length && scope[0].ym > nowYm ? " (forecast)" : "");
+    }
+    if (!scope.length) return null;
+
+    function sum(f){ return scope.reduce(function(s,r){ return s + f(r); }, 0); }
+    var revenue  = sum(function(r){ return r.revenue; });
+    var costs    = sum(function(r){ return r.costs; });
+    var pool     = sum(function(r){ return r.pool; });
+    var other    = sum(function(r){ return r.other; });
+    var stillEst = sum(function(r){ return r.estimated ? r.poolEst : 0; });
+    var gap = revenue - costs, ok = gap >= 0;
+    var pct = costs ? revenue / costs * 100 : null;
+
+    var card = h("div",{class:"card"},
+      h("div",{class:"section-label"},"On target? — " + lbl),
+      h("div",{class:"be-head " + (ok ? "amt-pos" : "amt-neg")},
+        ok ? "On target — " + fmtEUR(gap) + " above break-even"
+           : "Short by " + fmtEUR(-gap)),
+      beBar(revenue, costs, true),
+      h("div",{class:"be-line sub"},
+        h("span",null,"revenue " + fmtEUR(revenue)),
+        h("span",null,"break-even " + fmtEUR(costs) +
+          (pct == null ? "" : "  ·  " + pct.toFixed(0) + "% covered"))));
+
+    card.append(h("div",{class:"pool-note"},
+      "Break-even " + fmtEUR(costs) + " = pool " + fmtEUR(pool) + " + " + fmtEUR(other) +
+      " of other costs booked."));
+    if (stillEst)
+      card.append(h("div",{class:"pool-note"},
+        fmtEUR(stillEst) + " of that pool figure is the contract estimate for lanes already " +
+        "swum whose invoice hasn't arrived yet. The profit tile above doesn't count it, which " +
+        "is why this reads " + fmtEUR(stillEst) + " worse — this is the truer number."));
+    if (scope.filter(function(r){ return r.ym === nowYm; }).length)
+      card.append(h("div",{class:"pool-note"},
+        monthLabel(nowYm) + " is still running, so its other costs are only the bills booked " +
+        "so far and its break-even line will still move up."));
+    if (filters.month == null && ahead.length && !forecast){
+      var aheadCost = ahead.reduce(function(s,r){ return s + r.costs; }, 0);
+      card.append(h("div",{class:"pool-note"},
+        "Still ahead in " + filters.year + ": " + fmtEUR(aheadCost) + " of pool time across " +
+        ahead.length + " more month" + (ahead.length > 1 ? "s" : "") + " — see the Pool tab."));
+    }
+
+    // per-month bars, when the whole year is in view
+    if (filters.month == null && base.length > 1){
+      card.append(h("div",{class:"section-label",style:{marginTop:"14px"}},"Month by month"));
+      base.forEach(function(r){
+        var mok = r.gap >= 0;
+        card.append(h("div",{class:"be-item"},
+          h("div",{class:"be-line"},
+            h("span",{class:"m"}, monthLabel(r.ym),
+              r.estimated ? h("span",{class:"badge",style:{marginLeft:"6px"}},"pool est.") : null),
+            h("span",{class:"g " + (mok ? "amt-pos" : "amt-neg")}, (mok ? "+" : "") + fmtEUR(r.gap))),
+          beBar(r.revenue, r.costs),
+          h("div",{class:"be-line sub"},
+            h("span",null, fmtEUR(r.revenue)),
+            h("span",null,"needs " + fmtEUR(r.costs)))));
+      });
+    }
+    return card;
+  }
+
   // ----- pool -----
   function renderPool(){
     var cfg  = getPoolCfg();
@@ -1318,7 +1468,9 @@
     dows.sort(function(a,b){ return ((a+6)%7) - ((b+6)%7); });
 
     var seasonNet   = plan.totalNet;
-    var seasonGross = poolGross(seasonNet, cfg);
+    // sum the month rows rather than grossing up the season net, so btw rounding
+    // can never leave the table's total off by a cent from its own rows
+    var seasonGross = plan.months.reduce(function(s,m){ return s + poolGross(m.netCents, cfg); }, 0);
     var invoiced    = plan.months.reduce(function(s,m){ return s + (actual[m.ym] || 0); }, 0);
     var thisMonth   = plan.byMonth[thisYm];
     // Bills run 1-3 months late, so "still to come" is the whole season minus whatever
@@ -1486,8 +1638,8 @@
     var fRate  = h("input",{type:"text",value:(cfg.laneRateCents/100).toFixed(2).replace(".",","),
                             style:{width:"110px"}});
     var fVat   = h("select",null,
-      h("option",{value:"0"},"excl. btw (contract tariff)"),
-      h("option",{value:"9"},"+ 9% btw"),
+      h("option",{value:"9"},"+ 9% btw (what Friendship charges)"),
+      h("option",{value:"0"},"excl. btw (bare contract tariff)"),
       h("option",{value:"21"},"+ 21% btw"));
     fVat.value = String(poolVat(cfg));
 

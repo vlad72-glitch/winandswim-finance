@@ -2347,7 +2347,10 @@
       tbl2.append(tb2);
       pv2.append(h("div",{class:"scroll-x"}, tbl2));
       pv2.append(h("p",{class:"tiny muted",style:{marginTop:"8px"}},
-        "“Pre-season” = summer purchases for the September season; they count in September, not the month bought. Untick a month to skip it (e.g. a partial export that would lower a month you've already booked)."));
+        "Every month counts in itself. July and August also offer September, for summer "
+        + "purchases made for the new season — pick it only if you want that month deferred. "
+        + "Untick a month to skip it (a partial export that would lower a month you've already booked "
+        + "is unticked for you)."));
       pv2.append(h("div",{class:"row",style:{marginTop:"12px"}},
         h("button",{class:"primary", disabled: st.busy, onclick:doEversportsImport}, st.busy ? "Saving…" : "Save revenue"),
         h("button",{class:"ghost", disabled: st.busy, onclick:function(){ importState = null; render(); }},"Cancel")));

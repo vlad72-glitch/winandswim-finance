@@ -313,6 +313,7 @@
     transition:border-color var(--t) ease,background var(--t) ease,color var(--t) ease;}
   .dropzone.over{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-ink);}
   .dz-icon{width:30px;height:30px;color:var(--accent);}
+  .warn-icon{width:13px;height:13px;color:var(--warn);}
   @media (hover:hover){ .dropzone:hover{border-color:var(--accent);color:var(--ink-2);} }
   .editline{display:flex;gap:var(--s2);align-items:center;padding:var(--s2) 0;
     border-bottom:1px solid var(--line);flex-wrap:wrap;}
@@ -411,8 +412,15 @@
     .pl-table .col-detail{display:none;}
     .pool-table th,.pool-table td,
     .exp-table th,.exp-table td{padding:var(--s2) var(--s1);font-size:var(--fs-xs);}
-    .tx-row{flex-wrap:wrap;}
-    .tx-amt{width:auto;}
+    /* On a phone the row wrapped but the NAME kept losing the fight to the two
+       selects, so every row read "Evers…". Give the name its own line and let the
+       controls share the one below. */
+    .tx-row{flex-wrap:wrap;row-gap:var(--s2);gap:var(--s2);}
+    .tx-date{order:1;width:auto;}
+    .tx-amt{order:2;margin-left:auto;width:auto;}
+    .tx-row button{order:3;}
+    .tx-main{order:4;flex:1 1 100%;min-width:100%;}
+    .tx-row select{order:5;flex:1 1 40%;max-width:none;min-width:0;}
   }
 
   /* Motion reports state change; it is never the point. Strip movement when asked. */
@@ -483,13 +491,12 @@
     settings:'<path d="M4 7h9M18.5 7H20M4 17h2.5M11.5 17H20"/>'
       + '<circle cx="15.7" cy="7" r="2.4"/><circle cx="9" cy="17" r="2.4"/>',
     close:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    edit:'<path d="M4.5 19.5h4L19 9a2.12 2.12 0 0 0-3-3L5.5 16.5v3Z"/><path d="M14.5 7.5 17.5 10.5"/>',
     plus:'<path d="M12 5.5v13M5.5 12h13"/>',
     logout:'<path d="M9.5 20.5h-3a2.5 2.5 0 0 1-2.5-2.5v-12a2.5 2.5 0 0 1 2.5-2.5h3"/>'
       + '<path d="M16 16.5l4.5-4.5L16 7.5M20.5 12H9.5"/>',
     alert:'<path d="M12 9.5v4M12 17.2h.01"/>'
-      + '<path d="M10.3 4.1 2.6 17.2A2 2 0 0 0 4.3 20.2h15.4a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z"/>',
-    file:'<path d="M14 3.5H7.5A2.5 2.5 0 0 0 5 6v12a2.5 2.5 0 0 0 2.5 2.5h9A2.5 2.5 0 0 0 19 18V8.5Z"/>'
-      + '<path d="M14 3.5V8.5H19"/>'
+      + '<path d="M10.3 4.1 2.6 17.2A2 2 0 0 0 4.3 20.2h15.4a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z"/>'
   };
   function icon(name, cls){
     var e = document.createElement("span");
@@ -2168,8 +2175,9 @@
       sel,
       msel,
       h("span",{class:"tx-amt " + (t.amount_cents >= 0 ? "amt-pos" : "amt-neg")}, fmtEUR(t.amount_cents)),
-      t.source === "manual" ? h("button",{class:"ghost small",title:"Edit", onclick:function(){ editingTxId = t.id; addingManual = false; render(); }},"✎") : null,
-      t.source === "manual" ? h("button",{class:"danger small icon-btn","aria-label":"Remove",title:"Delete", onclick:function(){
+      t.source === "manual" ? h("button",{class:"ghost small icon-btn","aria-label":"Edit",title:"Edit",
+        onclick:function(){ editingTxId = t.id; addingManual = false; render(); }}, icon("edit")) : null,
+      t.source === "manual" ? h("button",{class:"danger small icon-btn","aria-label":"Delete",title:"Delete", onclick:function(){
         if (confirm("Delete this manual entry?")) deleteTx(t.id);
       }}, icon("close")) : null
     );
@@ -2280,7 +2288,8 @@
 
     if (st.errors.length){
       var eb = h("div",{class:"card",style:{marginTop:"14px"}},
-        h("div",{class:"section-label"},"Warnings (" + st.errors.length + ")"));
+        h("div",{class:"section-label",style:{display:"flex",alignItems:"center",gap:"6px"}},
+          icon("alert","warn-icon"), h("span",null,"Warnings (" + st.errors.length + ")")));
       st.errors.slice(0,8).forEach(function(x){ eb.append(h("div",{class:"small",style:{color:"var(--warn)"}}, x)); });
       if (st.errors.length > 8) eb.append(h("div",{class:"tiny muted"}, "…and " + (st.errors.length-8) + " more."));
       APP.append(eb);

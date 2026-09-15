@@ -7,8 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="W&S Finance">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#eef2f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b1419" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0b1419">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -24,7 +23,7 @@
      text/background pair is >= 4.5:1 in both themes.
      ============================================================ */
   :root{
-    color-scheme:light dark;
+    color-scheme:dark;
 
     --font:"Instrument Sans",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 
@@ -40,44 +39,24 @@
     --ease-in-out:cubic-bezier(.77,0,.175,1);
     --t-fast:120ms; --t:180ms; --t-slow:240ms;
 
-    /* light: neutrals tinted toward the accent, never pure gray */
-    --bg:#eef2f5; --surface:#fff; --surface-2:#f6f9fb; --surface-3:#e7eef3;
-    --ink:#0d1b24; --ink-2:#334e5c; --muted:#4d6775;
-    --line:#dde5eb; --line-strong:#c3d1da;
-    --accent:#0b6e88; --accent-ink:#075167; --accent-bg:#e2f1f6; --on-accent:#fff;
-    --good:#0b6e4f; --good-bg:#dbf3e8;
-    --bad:#b3261e;  --bad-bg:#fdecea;
-    --warn:#8a5200; --warn-bg:#fbf1e0;
-    --fill-good:#0f7d5b; --fill-bad:#c4352c;
-    --ring:#0b6e88;
-    --shadow-sm:0 1px 2px rgba(13,27,36,.05),0 1px 1px rgba(13,27,36,.04);
-    --shadow-md:0 1px 2px rgba(13,27,36,.04),0 8px 20px -10px rgba(13,27,36,.16);
+    /* Dark only, by choice — surfaces rise with elevation, neutrals tinted
+       toward the accent. There is no light palette to fall back to. */
+    --bg:#0b1419; --surface:#111e25; --surface-2:#16262e; --surface-3:#1d313a;
+    --ink:#e8f0f4; --ink-2:#a9c0cb; --muted:#7f9ba8;
+    --line:#22353f; --line-strong:#314854;
+    --accent:#3bb6d8; --accent-ink:#8fd9ee; --accent-bg:#13323d; --on-accent:#04222c;
+    --good:#4ecb96; --good-bg:#10312a;
+    --bad:#ff8177;  --bad-bg:#36191a;
+    --warn:#e0a458; --warn-bg:#33240f;
+    --fill-good:#2a9d77; --fill-bad:#cf4a3e;
+    --ring:#3bb6d8;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --shadow-md:0 1px 2px rgba(0,0,0,.3),0 8px 20px -10px rgba(0,0,0,.6);
 
-    --viz-income:#0b6e88; --viz-expense:#cf5a22; --viz-profit:#0b6e4f;
-    --viz-muted:#7e97a4; --viz-grid:#e3eaef; --viz-baseline:#c3d1da;
-    --viz-text:#4d6775;
+    --viz-income:#3bb6d8; --viz-expense:#f08a52; --viz-profit:#4ecb96;
+    --viz-muted:#6d8593; --viz-grid:#1e313a; --viz-baseline:#314854;
+    --viz-text:#7f9ba8;
   }
-  @media (prefers-color-scheme:dark){
-    :root{
-      /* composed for dark, not inverted: surfaces rise with elevation */
-      --bg:#0b1419; --surface:#111e25; --surface-2:#16262e; --surface-3:#1d313a;
-      --ink:#e8f0f4; --ink-2:#a9c0cb; --muted:#7f9ba8;
-      --line:#22353f; --line-strong:#314854;
-      --accent:#3bb6d8; --accent-ink:#8fd9ee; --accent-bg:#13323d; --on-accent:#04222c;
-      --good:#4ecb96; --good-bg:#10312a;
-      --bad:#ff8177;  --bad-bg:#36191a;
-      --warn:#e0a458; --warn-bg:#33240f;
-      --fill-good:#2a9d77; --fill-bad:#cf4a3e;
-      --ring:#3bb6d8;
-      --shadow-sm:0 1px 2px rgba(0,0,0,.4);
-      --shadow-md:0 1px 2px rgba(0,0,0,.3),0 8px 20px -10px rgba(0,0,0,.6);
-
-      --viz-income:#3bb6d8; --viz-expense:#f08a52; --viz-profit:#4ecb96;
-      --viz-muted:#6d8593; --viz-grid:#1e313a; --viz-baseline:#314854;
-      --viz-text:#7f9ba8;
-    }
-  }
-
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   html{-webkit-text-size-adjust:100%;}
@@ -306,15 +285,6 @@
   }
 
   /* ---------- import ---------- */
-  .dropzone{border:1.5px dashed var(--line-strong);border-radius:var(--r-lg);
-    padding:var(--s7) var(--s4);text-align:center;color:var(--muted);
-    display:flex;flex-direction:column;align-items:center;gap:var(--s3);
-    background:var(--surface-2);cursor:pointer;
-    transition:border-color var(--t) ease,background var(--t) ease,color var(--t) ease;}
-  .dropzone.over{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-ink);}
-  .dz-icon{width:30px;height:30px;color:var(--accent);}
-  .warn-icon{width:13px;height:13px;color:var(--warn);}
-  @media (hover:hover){ .dropzone:hover{border-color:var(--accent);color:var(--ink-2);} }
   .editline{display:flex;gap:var(--s2);align-items:center;padding:var(--s2) 0;
     border-bottom:1px solid var(--line);flex-wrap:wrap;}
   .editline:last-child{border-bottom:none;}
@@ -337,11 +307,6 @@
   .pl-table tr:last-child td{border-bottom:none;}
   .pl-table tr.now td{background:var(--accent-bg);}
   .pl-table td.muted{color:var(--muted);}
-  .preview-table{width:100%;border-collapse:collapse;font-size:var(--fs-xs);}
-  .preview-table th,.preview-table td{text-align:left;padding:var(--s1) var(--s2);
-    border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;
-    text-overflow:ellipsis;max-width:180px;}
-  .preview-table th{color:var(--muted);font-weight:650;}
   .scroll-x{overflow-x:auto;overscroll-behavior-x:contain;}
   .exp-table{margin-top:var(--s2);}
   .exp-table td.share,.exp-table th.share{text-align:left;width:46%;}
@@ -487,16 +452,14 @@
       + '<path d="M7 12.8V6.2A2.2 2.2 0 0 1 11.4 6"/><path d="M16.6 12V6.2A2.2 2.2 0 0 0 12.2 6"/><path d="M7 9.4h9.6"/>',
     transactions:'<path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/>'
       + '<path d="M3.6 6.5h.01M3.6 12h.01M3.6 17.5h.01"/>',
-    import:'<path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M4 14.5v3.5a2.5 2.5 0 0 0 2.5 2.5h11a2.5 2.5 0 0 0 2.5-2.5v-3.5"/>',
     settings:'<path d="M4 7h9M18.5 7H20M4 17h2.5M11.5 17H20"/>'
       + '<circle cx="15.7" cy="7" r="2.4"/><circle cx="9" cy="17" r="2.4"/>',
+    analytics:'<path d="M3.5 3v16A1.5 1.5 0 0 0 5 20.5h15.5"/><path d="M7 15.5l4-4.8 3.3 2.9L20.5 7"/>',
     close:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
     edit:'<path d="M4.5 19.5h4L19 9a2.12 2.12 0 0 0-3-3L5.5 16.5v3Z"/><path d="M14.5 7.5 17.5 10.5"/>',
     plus:'<path d="M12 5.5v13M5.5 12h13"/>',
     logout:'<path d="M9.5 20.5h-3a2.5 2.5 0 0 1-2.5-2.5v-12a2.5 2.5 0 0 1 2.5-2.5h3"/>'
-      + '<path d="M16 16.5l4.5-4.5L16 7.5M20.5 12H9.5"/>',
-    alert:'<path d="M12 9.5v4M12 17.2h.01"/>'
-      + '<path d="M10.3 4.1 2.6 17.2A2 2 0 0 0 4.3 20.2h15.4a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z"/>'
+      + '<path d="M16 16.5l4.5-4.5L16 7.5M20.5 12H9.5"/>'
   };
   function icon(name, cls){
     var e = document.createElement("span");
@@ -525,7 +488,7 @@
   // ---------- chart palette (validated with the dataviz palette validator) ----------
   var VIZ = {
     income:"#0b6e88", expense:"#cf5a22", profit:"#0b6e4f",
-    muted:"#7e97a4", grid:"#e3eaef", baseline:"#c3d1da", text:"#4d6775",
+    muted:"#6d8593", grid:"#1e313a", baseline:"#314854", text:"#7f9ba8", surface:"#111e25",
     slots:["#0b6e88","#1a9e74","#c98a00","#2f7d32","#5b4bb8","#cf4b43","#c2688f","#cf5a22"],
     uncategorized:"#7e97a4", other:"#c3d1da"
   };
@@ -537,6 +500,8 @@
       var v = cs.getPropertyValue("--viz-" + k).trim();
       if (v) VIZ[k] = v;
     });
+    var sf = cs.getPropertyValue("--surface").trim();
+    if (sf) VIZ.surface = sf;
   }
 
   // ---------- config / client ----------
@@ -547,12 +512,11 @@
 
   // ---------- state ----------
   var session = null;
-  var data = { categories:[], rules:[], transactions:[], imports:[] };
+  var data = { categories:[], rules:[], transactions:[] };
   var view = { name:"dashboard" };
   var now = new Date();
   var filters = { year: now.getFullYear(), month: null, categoryId: "", search: "", uncategorizedOnly: false };
   var txLimit = 100;
-  var importState = null;  // { filename, rows, errors, busy, result:{added,skipped,uncategorized} }
   var charts = {};
   var loginError = "";
   var addingManual = false;
@@ -561,7 +525,6 @@
   function nav(name){
     view = { name:name };
     txLimit = 100;
-    if (name !== "import") importState = null;
     render();
   }
 
@@ -615,20 +578,6 @@
 
   // ---------- money parsing ----------
   // Rabobank "Bedrag": "+1.234,56" / "-12,50" (decimal comma, optional thousands dots)
-  function parseAmountCents(s){
-    if (s == null) return null;
-    s = String(s).trim();
-    if (!s) return null;
-    var sign = 1;
-    if (s[0] === "-"){ sign = -1; s = s.slice(1); }
-    else if (s[0] === "+"){ s = s.slice(1); }
-    s = s.replace(/\./g, "");
-    var parts = s.split(",");
-    if (parts.length > 2 || !/^\d+$/.test(parts[0]) || (parts[1] != null && !/^\d{1,2}$/.test(parts[1]))) return null;
-    var cents = Number(parts[0]) * 100 + (parts[1] ? Number((parts[1] + "00").slice(0,2)) : 0);
-    return sign * cents;
-  }
-  // user-typed amounts: accepts "12,50", "12.50", "1.234,56", "1,234.56", "1200"
   function parseUserAmount(s){
     s = String(s == null ? "" : s).trim().replace(/[€\s]/g, "");
     if (!s) return null;
@@ -646,166 +595,9 @@
     if (!/^\d+$/.test(intPart)) return null;
     return Number(intPart) * 100 + (fracPart ? Number((fracPart + "00").slice(0,2)) : 0);
   }
-  // Eversports "Gross Price": US style — dot decimal, comma thousands ("1,732.55", "34.95", "-20").
-  // Blank (video recordings have no price) returns null so the row is skipped.
-  function parsePriceCents(s){
-    if (s == null) return null;
-    s = String(s).trim();
-    if (!s) return null;
-    var sign = 1;
-    if (s[0] === "-"){ sign = -1; s = s.slice(1); }
-    else if (s[0] === "+"){ s = s.slice(1); }
-    s = s.replace(/,/g, "");
-    if (!/^\d+(\.\d+)?$/.test(s)) return null;
-    var parts = s.split(".");
-    return sign * (Number(parts[0]) * 100 + (parts[1] ? Number((parts[1] + "00").slice(0,2)) : 0));
-  }
-
-  // ---------- CSV parsing ----------
-  function decodeCSVFile(buf){
-    try{ return new TextDecoder("utf-8", { fatal:true }).decode(buf); }
-    catch(e){ return new TextDecoder("windows-1252").decode(buf); }
-  }
-  // RFC-4180 state machine: quoted fields, "" escapes, CR/LF/CRLF.
-  // delim defaults to comma (Rabobank); Eversports exports use ";".
-  function parseCSV(text, delim){
-    delim = delim || ",";
-    var rows = [], row = [], field = "", inQ = false, i = 0, ch;
-    while (i < text.length){
-      ch = text[i];
-      if (inQ){
-        if (ch === '"'){
-          if (text[i+1] === '"'){ field += '"'; i += 2; continue; }
-          inQ = false; i++; continue;
-        }
-        field += ch; i++; continue;
-      }
-      if (ch === '"'){ inQ = true; i++; continue; }
-      if (ch === delim){ row.push(field); field = ""; i++; continue; }
-      if (ch === "\r"){ i++; continue; }
-      if (ch === "\n"){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
-      field += ch; i++;
-    }
-    if (field !== "" || row.length){ row.push(field); rows.push(row); }
-    return rows.filter(function(r){ return r.length > 1 || (r.length === 1 && r[0].trim() !== ""); });
-  }
-  function normHeader(s){
-    return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-  }
-  function parseRabobankCSV(text){
-    var rows = parseCSV(text);
-    if (!rows.length) return { rows:[], errors:["File is empty."] };
-    var header = rows[0].map(normHeader);
-    // Rabobank names the columns in the language of your banking UI; accept both.
-    function col(names){
-      for (var i=0;i<names.length;i++){
-        var idx = header.indexOf(normHeader(names[i]));
-        if (idx !== -1) return idx;
-      }
-      return -1;
-    }
-    var C = {
-      iban: col(["IBAN/BBAN"]), munt: col(["Munt","Ccy"]), volgnr: col(["Volgnr","Seq No"]),
-      datum: col(["Datum","Date"]), bedrag: col(["Bedrag","Amount"]), saldo: col(["Saldo na trn","Bal After Bkng"]),
-      cIban: col(["Tegenrekening IBAN/BBAN","Counterpty IBAN/BBAN"]), cName: col(["Naam tegenpartij","Name Counterpty"]),
-      code: col(["Code"]), ref: col(["Transactiereferentie","Transaction Reference"]),
-      o1: col(["Omschrijving-1","Description-1"]), o2: col(["Omschrijving-2","Description-2"]), o3: col(["Omschrijving-3","Description-3"])
-    };
-    var missing = ["iban","volgnr","datum","bedrag"].filter(function(k){ return C[k] === -1; });
-    if (missing.length){
-      return { rows:[], errors:["This does not look like a Rabobank CSV export — missing column(s): " +
-        missing.map(function(k){ return {iban:"IBAN/BBAN",volgnr:"Volgnr / Seq No",datum:"Datum / Date",bedrag:"Bedrag / Amount"}[k]; }).join(", ") +
-        ". In Rabobank online banking choose Download → CSV (kommagescheiden / comma separated)."] };
-    }
-    function get(r, i){ return i === -1 ? "" : String(r[i] == null ? "" : r[i]).trim(); }
-    var out = [], errors = [];
-    for (var li = 1; li < rows.length; li++){
-      var r = rows[li], line = li + 1;
-      var volgnr = get(r, C.volgnr);
-      var datum = get(r, C.datum);
-      var cents = parseAmountCents(get(r, C.bedrag));
-      var munt = get(r, C.munt) || "EUR";
-      if (!/^\d+$/.test(volgnr)){ errors.push("Line " + line + ": missing or invalid Volgnr — skipped."); continue; }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)){ errors.push("Line " + line + ": invalid date \"" + datum + "\" — skipped."); continue; }
-      if (cents == null){ errors.push("Line " + line + ": could not read amount \"" + get(r, C.bedrag) + "\" — skipped."); continue; }
-      if (munt.toUpperCase() !== "EUR"){ errors.push("Line " + line + ": non-EUR currency " + munt + " — skipped."); continue; }
-      var desc = [get(r,C.o1), get(r,C.o2), get(r,C.o3)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-      out.push({
-        account_iban: get(r, C.iban),
-        sequence_no: Number(volgnr),
-        booking_date: datum,
-        amount_cents: cents,
-        currency: "EUR",
-        counterparty_iban: get(r, C.cIban),
-        counterparty_name: get(r, C.cName),
-        description: desc,
-        code: get(r, C.code),
-        transaction_ref: get(r, C.ref),
-        balance_after_cents: parseAmountCents(get(r, C.saldo)),
-        source: "import"
-      });
-    }
-    return { rows: out, errors: errors };
-  }
-
   // ---------- month helpers ----------
-  function monthLastDayISO(ym){ // "YYYY-MM" -> "YYYY-MM-DD" (last day)
-    var y = Number(ym.slice(0,4)), m = Number(ym.slice(5,7));
-    return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2,"0");
-  }
   function monthLabel(ym){ return MONTHS[Number(ym.slice(5,7)) - 1] + " " + ym.slice(0,4); }
-  // Summer purchases are for the September season, so July/August are the two months
-  // where "count it in September instead" is a sensible option. It is only an OPTION:
-  // the default is always the invoice's own month, so each month shows its own selling.
-  function preseasonOption(ym){
-    var m = ym.slice(5,7);
-    return (m === "07" || m === "08") ? ym.slice(0,4) + "-09" : null;
-  }
-
-  // ---------- Eversports revenue import ----------
-  // Sniff which kind of CSV was dropped from its header line.
-  function detectFileKind(text){
-    var first = (text.split(/\r?\n/)[0] || "").toLowerCase();
-    // Eversports has two revenue exports and they are not interchangeable. The books
-    // run on the invoice-based one; the payments one is cash-basis. Tell them apart
-    // before parsing, or a cash-basis file silently lands as earned revenue.
-    if (first.indexOf("paid at") !== -1 || first.indexOf("paid gross") !== -1) return "eversports-paid";
-    if (first.indexOf("gross price") !== -1 || first.indexOf("invoice number") !== -1) return "eversports";
-    if (first.indexOf("iban/bban") !== -1 || first.indexOf("seq no") !== -1 || first.indexOf("volgnr") !== -1) return "rabobank";
-    return null;
-  }
-  // Sum gross revenue per invoice month from the Eversports "revenue" export.
-  function parseEversportsCSV(text){
-    var rows = parseCSV(text, ";");
-    if (!rows.length) return { data:{ months:[], total_cents:0, lineCount:0 }, errors:["File is empty."] };
-    var header = rows[0].map(normHeader);
-    function col(name){ return header.indexOf(normHeader(name)); }
-    var C = { num: col("Invoice Number"), date: col("Invoice Date"), gross: col("Gross Price") };
-    if (C.date === -1 || C.gross === -1){
-      return { data:{ months:[], total_cents:0, lineCount:0 },
-        errors:["This doesn't look like an Eversports revenue export (missing Invoice Date / Gross Price). In Eversports, export the revenue report as CSV."] };
-    }
-    function get(r,i){ return i === -1 ? "" : String(r[i] == null ? "" : r[i]).trim(); }
-    var byMonth = {}, total = 0, lineCount = 0;
-    for (var li = 1; li < rows.length; li++){
-      var r = rows[li], num = get(r, C.num), date = get(r, C.date);
-      if (/^sum/i.test(num) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;   // skip the "Sum …" footer + malformed rows
-      var cents = parsePriceCents(get(r, C.gross));
-      if (cents == null) continue;                                            // blank price (free recordings) → no revenue
-      var ym = date.slice(0,7);
-      byMonth[ym] = (byMonth[ym] || 0) + cents;
-      total += cents; lineCount++;
-    }
-    var months = Object.keys(byMonth).sort().map(function(ym){
-      var countsIn = ym;   // own month by default — never auto-deferred
-      var existing = findEarnedRow(ym);
-      return { month: ym, gross_cents: byMonth[ym], countsIn: countsIn,
-               existing: existing, existingCents: existing ? existing.amount_cents : null,
-               include: !existing || byMonth[ym] >= existing.amount_cents };
-    });
-    return { data:{ months: months, total_cents: total, lineCount: lineCount }, errors:[] };
-  }
-
+  function monthShort(ym){ return MONTHS[Number(ym.slice(5,7)) - 1] + " '" + ym.slice(2,4); }
   // ---------- rule engine ----------
   function sortedRules(){
     return data.rules.slice().sort(function(a,b){ return a.priority - b.priority || a.id - b.id; });
@@ -819,10 +611,6 @@
       if (r.keyword && hay.indexOf(r.keyword.toLowerCase()) !== -1) return r;
     }
     return null;
-  }
-  function categorize(tx, rules){
-    var r = matchRule(tx, rules);
-    return r ? r.category_id : null;
   }
   function ruleReportDate(tx, r){
     return (r && r.shift_months) ? shiftMonthISO(tx.booking_date, r.shift_months) : null;
@@ -1130,14 +918,12 @@
     if (!sb || !session) return;
     var res = await Promise.all([
       sb.from("categories").select("*"),
-      sb.from("rules").select("*"),
-      sb.from("imports").select("*").order("imported_at", { ascending:false }).limit(30)
+      sb.from("rules").select("*")
     ]);
     var firstErr = res.find(function(r){ return r.error; });
     if (firstErr) throw firstErr.error;
     data.categories = res[0].data || [];
     data.rules = res[1].data || [];
-    data.imports = res[2].data || [];
     data.transactions = await fetchAllTransactions();
   }
 
@@ -1202,145 +988,6 @@
       return Promise.all(calls).then(function(rs){ return rs.find(function(r){ return r.error; }) || { error:null }; });
     });
     alert("Categorized " + n + " transaction" + (n===1?"":"s") + " using your rules.");
-  }
-
-  // ---------- Eversports earned-revenue rows (one manual row per invoice month) ----------
-  function lessonFeesCatId(){
-    var c = data.categories.find(function(c){ return c.name === "Lesson fees"; });
-    return c ? c.id : null;
-  }
-  // The source invoice month of an earned row, from its description: the "YYYY-MM" marker
-  // new rows carry, or — for the one legacy pre-season row written before markers existed —
-  // the "…(bought in <Month>…)" phrase combined with the year it counts in.
-  function everSourceMonth(t){
-    var m = /(20\d\d-\d\d)/.exec(t.description || "");
-    if (m) return m[1];
-    var mn = /bought in (\w+)/i.exec(t.description || "");
-    if (mn){
-      var idx = MONTHS.map(function(x){ return x.toLowerCase(); }).indexOf(mn[1].slice(0,3).toLowerCase());
-      if (idx !== -1) return (t.report_date || t.booking_date).slice(0,4) + "-" + String(idx+1).padStart(2,"0");
-    }
-    return null;
-  }
-  // Find the existing "Eversports (earned)" row for a source month, so re-imports update it
-  // rather than duplicating. Matched purely by source month — never by which month it counts in,
-  // so two summer months both deferring to September can't collide on one row.
-  function findEarnedRow(sourceMonth){
-    return data.transactions.filter(function(t){
-      return t.source === "manual" && t.counterparty_name === "Eversports (earned)" && everSourceMonth(t) === sourceMonth;
-    })[0] || null;
-  }
-  function earnedRow(sourceMonth, cents, countsInMonth){
-    var deferred = countsInMonth !== sourceMonth;
-    return {
-      booking_date: monthLastDayISO(sourceMonth),
-      amount_cents: cents,
-      counterparty_name: "Eversports (earned)",
-      description: deferred
-        ? "Eversports earned " + sourceMonth + " — " + monthLabel(countsInMonth) + " pre-season"
-        : "Eversports earned " + sourceMonth + " (revenue report)",
-      category_id: lessonFeesCatId(),
-      report_date: deferred ? countsInMonth + "-01" : null,
-      account_iban: "MANUAL", sequence_no: null, source: "manual", currency: "EUR"
-    };
-  }
-  async function doEversportsImport(){
-    var st = importState;
-    if (!st || st.kind !== "eversports" || !st.ev || st.busy) return;
-    if (lessonFeesCatId() == null){ alert('Add a "Lesson fees" category first (in Settings).'); return; }
-    st.busy = true; render();
-    var chosen = st.ev.months.filter(function(m){ return m.include; });
-    var wrote = 0, error = null;
-    for (var i = 0; i < chosen.length && !error; i++){
-      var mo = chosen[i];
-      var existing = findEarnedRow(mo.month);
-      var row = earnedRow(mo.month, mo.gross_cents, mo.countsIn);
-      var r = existing ? await sb.from("transactions").update(row).eq("id", existing.id)
-                       : await sb.from("transactions").insert(row);
-      if (r.error){ error = r.error; break; }
-      wrote++;
-    }
-    if (error){
-      st.busy = false;
-      st.errors = (st.errors || []).concat(["Save failed: " + error.message]);
-      render();
-      return;
-    }
-    await sb.from("imports").insert({ filename: st.filename, added_count: wrote, skipped_count: st.ev.months.length - wrote });
-    try{ await loadAll(); }catch(e){ console.warn(e); }
-    st.busy = false;
-    st.result = { kind:"eversports", wrote: wrote };
-    st.ev = null;
-    render();
-  }
-
-  // ---------- import ----------
-  async function handleFile(file){
-    if (!file) return;
-    importState = { filename: file.name, kind: null, rows: [], errors: [], ev: null, busy: false, result: null };
-    try{
-      var text = decodeCSVFile(await file.arrayBuffer());
-      var kind = detectFileKind(text);
-      if (kind === "eversports-paid"){
-        importState.kind = "eversports";
-        importState.ev = null;
-        importState.errors = [
-          "This is the Eversports payments export (\"Paid At\" / \"Paid Gross\") — money received, not revenue earned.",
-          "Two things go wrong if it is booked as earned revenue: invoices that are issued but not yet paid are missing entirely, and a direct debit counts in the month it clears rather than the month it covers.",
-          "Export the invoice-based revenue report instead — the one whose columns are \"Invoice Date\" and \"Gross Price\". That is the basis every other month in this app is on."
-        ];
-      } else if (kind === "eversports"){
-        importState.kind = "eversports";
-        var pe = parseEversportsCSV(text);
-        importState.ev = pe.data;
-        importState.errors = pe.errors;
-      } else {
-        importState.kind = "rabobank";
-        var parsed = parseRabobankCSV(text);
-        importState.rows = parsed.rows;
-        importState.errors = parsed.errors;
-      }
-    }catch(e){
-      importState.errors = ["Could not read file: " + (e.message || e)];
-    }
-    render();
-  }
-
-  async function doImport(){
-    if (!importState || !importState.rows.length || importState.busy) return;
-    importState.busy = true;
-    render();
-    var rules = sortedRules();
-    var rows = importState.rows.map(function(t){
-      var o = Object.assign({}, t);
-      var r = matchRule(t, rules);
-      o.category_id = r ? r.category_id : null;
-      o.report_date = ruleReportDate(t, r);
-      return o;
-    });
-    var added = 0, error = null;
-    for (var i = 0; i < rows.length && !error; i += 500){
-      var chunk = rows.slice(i, i + 500);
-      var r = await sb.from("transactions")
-        .upsert(chunk, { onConflict:"account_iban,sequence_no", ignoreDuplicates:true })
-        .select("id,category_id");
-      if (r.error){ error = r.error; break; }
-      added += (r.data || []).length;
-    }
-    if (error){
-      importState.busy = false;
-      importState.errors = importState.errors.concat(["Import failed: " + error.message]);
-      render();
-      return;
-    }
-    var skipped = rows.length - added;
-    await sb.from("imports").insert({ filename: importState.filename, added_count: added, skipped_count: skipped });
-    try{ await loadAll(); }catch(e){ console.warn(e); }
-    var uncategorized = data.transactions.filter(function(t){ return t.category_id == null; }).length;
-    importState.busy = false;
-    importState.result = { kind:"rabobank", added: added, skipped: skipped, uncategorized: uncategorized };
-    importState.rows = [];
-    render();
   }
 
   // ---------- auth ----------
@@ -1420,20 +1067,20 @@
 
     var reviewCount = data.transactions.filter(needsReview).length;
     APP.append(h("nav",{class:"tabs"},
-      ["dashboard","pool","transactions","import","settings"].map(function(n){
+      ["dashboard","pool","analytics","transactions","settings"].map(function(n){
         var btn = h("button",{class: view.name===n ? "active" : "",
                               "aria-current": view.name===n ? "page" : false,
                               onclick:function(){ nav(n); }},
           icon(n), h("span",null, n.charAt(0).toUpperCase() + n.slice(1)));
-        if (n === "import" && reviewCount)
+        if (n === "transactions" && reviewCount)
           btn.append(h("span",{class:"badge warn"}, String(reviewCount)));
         return btn;
       })
     ));
 
     if (view.name === "pool") return renderPool();
+    if (view.name === "analytics") return renderAnalytics();
     if (view.name === "transactions") return renderTransactions();
-    if (view.name === "import") return renderImport();
     if (view.name === "settings") return renderSettings();
     return renderDashboard();
   }
@@ -1510,10 +1157,6 @@
     APP.append(h("div",{class:"card"},
       h("div",{class:"section-label"},"Income vs expenses per month — " + filters.year),
       h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-monthly"}))));
-    // margin (different unit → its own chart)
-    APP.append(h("div",{class:"card"},
-      h("div",{class:"section-label"},"Profit margin per month — " + filters.year),
-      h("div",{class:"chart-box"}, h("canvas",{id:"chart-margin"}))));
     // expense breakdown
     var breakdown = categoryBreakdown(periodTx);
     var bd = h("div",{class:"card"},
@@ -1525,88 +1168,6 @@
       bd.append(h("div",{class:"scroll-x"}, expenseTable(periodTx)));
     }
     APP.append(bd);
-
-    // ---- monthly P&L table ----
-    var activeMonths = [];
-    summary.forEach(function(m,i){ if (m.income || m.expense) activeMonths.push(i); });
-    if (activeMonths.length){
-      var yTot = totals(yearTx);
-      var plt = h("table",{class:"pl-table"},
-        h("thead",null,h("tr",null,
-          h("th",null,"Month"), h("th",null,"Income"), h("th",null,"Expenses"),
-          h("th",null,"Profit"), h("th",null,"Margin"))),
-        h("tbody",null,
-          activeMonths.map(function(i){
-            var m = summary[i];
-            return h("tr",null,
-              h("td",null, MONTHS[i]),
-              h("td",null, fmtEUR(m.income)),
-              h("td",null, fmtEUR(m.expense)),
-              h("td",{class: m.profit >= 0 ? "amt-pos" : "amt-neg"}, fmtEUR(m.profit)),
-              h("td",null, m.margin == null ? "—" : m.margin.toFixed(1) + "%"));
-          }),
-          h("tr",{class:"total"},
-            h("td",null,"Total " + filters.year),
-            h("td",null, fmtEUR(yTot.income)),
-            h("td",null, fmtEUR(yTot.expense)),
-            h("td",{class: yTot.profit >= 0 ? "amt-pos" : "amt-neg"}, fmtEUR(yTot.profit)),
-            h("td",null, yTot.margin == null ? "—" : yTot.margin.toFixed(1) + "%"))
-        ));
-      APP.append(h("div",{class:"card"},
-        h("div",{class:"section-label"},"Month by month — " + filters.year),
-        h("div",{class:"scroll-x"}, plt)));
-
-      // ---- expense sources per month (category × month matrix) — whole-year view only ----
-      // In a single-month view the clean "Expenses by category" table above already covers it,
-      // so we skip this wide grid (that's what forced horizontal scrolling to reach later months).
-      if (filters.month == null){
-      var rowsByCat = {};   // catKey -> { label, months: [12], total }
-      txInYear(filters.year).forEach(function(t){
-        if (t.amount_cents >= 0 || !inPL(t)) return;
-        var key = t.category_id == null ? "u" : String(t.category_id);
-        var r = rowsByCat[key] || (rowsByCat[key] = {
-          label: t.category_id == null ? "Uncategorized" : catName(t.category_id),
-          months: [0,0,0,0,0,0,0,0,0,0,0,0], total: 0 });
-        var mi = Number(txDate(t).slice(5,7)) - 1;
-        r.months[mi] += -t.amount_cents;
-        r.total += -t.amount_cents;
-      });
-      var catRows = Object.keys(rowsByCat).map(function(k){ return rowsByCat[k]; })
-        .sort(function(a,b){ return b.total - a.total; });
-      if (catRows.length){
-        var expMonths = activeMonths.filter(function(i){
-          return catRows.some(function(r){ return r.months[i] !== 0; });
-        });
-        var colTot = expMonths.map(function(i){
-          return catRows.reduce(function(s,r){ return s + r.months[i]; }, 0);
-        });
-        var grand = catRows.reduce(function(s,r){ return s + r.total; }, 0);
-        var xt = h("table",{class:"pl-table"},
-          h("thead",null,h("tr",null,
-            h("th",null,"Expense source"),
-            expMonths.map(function(i){ return h("th",null, MONTHS[i]); }),
-            h("th",null,"Total"),
-            h("th",null,"%"))),
-          h("tbody",null,
-            catRows.map(function(r){
-              return h("tr",null,
-                h("td",null, r.label),
-                expMonths.map(function(i){ return h("td",null, r.months[i] ? fmtEUR(r.months[i]) : "·"); }),
-                h("td",null, fmtEUR(r.total)),
-                h("td",null, grand ? (r.total / grand * 100).toFixed(1) + "%" : "—"));
-            }),
-            h("tr",{class:"total"},
-              h("td",null,"Total"),
-              expMonths.map(function(i,ci){ return h("td",null, fmtEUR(colTot[ci])); }),
-              h("td",null, fmtEUR(grand)),
-              h("td",null,"100%"))
-          ));
-        APP.append(h("div",{class:"card"},
-          h("div",{class:"section-label"},"Where the money goes — expenses per source, " + filters.year),
-          h("div",{class:"scroll-x"}, xt)));
-      }
-      }
-    }
 
     // ---- Chart.js instances (canvases are now in the DOM) ----
     var eur = function(c){ return c / 100; };
@@ -1633,28 +1194,6 @@
         scales: baseScales(true)
       }
     });
-    renderChart("chart-margin", {
-      type:"line",
-      data: {
-        labels: MONTHS,
-        datasets: [{ label:"Margin", data: summary.map(function(m){ return m.margin; }),
-          borderColor: VIZ.income, backgroundColor: VIZ.income,
-          borderWidth:2, pointRadius:3, pointHoverRadius:5, tension:.25, spanGaps:false }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        interaction:{ mode:"index", intersect:false },
-        plugins:{ legend:{ display:false },
-          tooltip:{ callbacks:{ label:function(c){
-            return c.parsed.y == null ? " no income" : " margin: " + c.parsed.y.toFixed(1) + "%";
-          } } } },
-        scales: (function(){
-          var s = baseScales(false);
-          s.y.grid = { color: function(ctx){ return ctx.tick.value === 0 ? VIZ.baseline : VIZ.grid; } };
-          return s;
-        })()
-      }
-    });
     if (breakdown.length){
       renderChart("chart-categories", {
         type:"doughnut",
@@ -1665,7 +1204,7 @@
             backgroundColor: breakdown.map(function(b){
               return b.categoryId === "other" ? VIZ.other : catColor(b.categoryId);
             }),
-            borderColor:"#ffffff", borderWidth:2
+            borderColor:VIZ.surface, borderWidth:2
           }]
         },
         options: {
@@ -1687,6 +1226,99 @@
         }
       });
     }
+  }
+
+  // ----- analytics -----
+  // Deliberately no date picker: this tab is the whole history in one run, so months
+  // can be read against each other across years without switching anything.
+  function renderAnalytics(){
+    var seen = {};
+    data.transactions.forEach(function(t){ if (inPL(t)) seen[txDate(t).slice(0,7)] = true; });
+    var months = Object.keys(seen).sort();
+    if (!months.length){
+      APP.append(h("div",{class:"card empty"},"Nothing to analyse yet."));
+      return;
+    }
+
+    var byMonth = {};
+    months.forEach(function(ym){ byMonth[ym] = { income:0, expense:0 }; });
+    data.transactions.forEach(function(t){
+      if (!inPL(t)) return;
+      var m = byMonth[txDate(t).slice(0,7)];
+      if (!m) return;
+      if (t.amount_cents > 0) m.income += t.amount_cents; else m.expense += -t.amount_cents;
+    });
+    function marginOf(income, profit){ return income > 0 ? (profit / income) * 100 : null; }
+    function moneyRow(label, income, expense, cls){
+      var profit = income - expense, mg = marginOf(income, profit);
+      return h("tr", cls ? {class:cls} : null,
+        h("td",null, label),
+        h("td",null, fmtEUR(income)),
+        h("td",null, fmtEUR(expense)),
+        h("td",{class: profit >= 0 ? "amt-pos" : "amt-neg"}, fmtEUR(profit)),
+        h("td",null, mg == null ? "—" : mg.toFixed(1) + "%"));
+    }
+
+    var tIn = 0, tOut = 0;
+    months.forEach(function(ym){ tIn += byMonth[ym].income; tOut += byMonth[ym].expense; });
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Month by month"),
+      h("div",{class:"scroll-x"},
+        h("table",{class:"pl-table"},
+          h("thead",null,h("tr",null,
+            h("th",null,"Month"), h("th",null,"Income"), h("th",null,"Expenses"),
+            h("th",null,"Profit"), h("th",null,"Margin"))),
+          h("tbody",null,
+            months.map(function(ym){
+              var m = byMonth[ym];
+              return moneyRow(monthLabel(ym), m.income, m.expense);
+            }),
+            moneyRow("All time", tIn, tOut, "total"))))));
+
+    // ---- where the money goes: category x month, whole history ----
+    var rowsByCat = {};
+    data.transactions.forEach(function(t){
+      if (t.amount_cents >= 0 || !inPL(t)) return;
+      var ym = txDate(t).slice(0,7);
+      var key = t.category_id == null ? "u" : String(t.category_id);
+      var r = rowsByCat[key] || (rowsByCat[key] = {
+        label: t.category_id == null ? "Uncategorized" : catName(t.category_id),
+        months: {}, total: 0 });
+      r.months[ym] = (r.months[ym] || 0) + (-t.amount_cents);
+      r.total += -t.amount_cents;
+    });
+    var catRows = Object.keys(rowsByCat).map(function(k){ return rowsByCat[k]; })
+      .sort(function(a,b){ return b.total - a.total; });
+    if (!catRows.length) return;
+    var expMonths = months.filter(function(ym){
+      return catRows.some(function(r){ return r.months[ym]; });
+    });
+    var grand = catRows.reduce(function(sum,r){ return sum + r.total; }, 0);
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Where the money goes — expenses per source"),
+      h("div",{class:"scroll-x"},
+        h("table",{class:"pl-table"},
+          h("thead",null,h("tr",null,
+            h("th",null,"Expense source"),
+            expMonths.map(function(ym){ return h("th",null, monthShort(ym)); }),
+            h("th",null,"Total"), h("th",null,"%"))),
+          h("tbody",null,
+            catRows.map(function(r){
+              return h("tr",null,
+                h("td",null, r.label),
+                expMonths.map(function(ym){
+                  return h("td",null, r.months[ym] ? fmtEUR(r.months[ym]) : "·"); }),
+                h("td",null, fmtEUR(r.total)),
+                h("td",null, grand ? (r.total / grand * 100).toFixed(1) + "%" : "—"));
+            }),
+            h("tr",{class:"total"},
+              h("td",null,"Total"),
+              expMonths.map(function(ym){
+                return h("td",null, fmtEUR(catRows.reduce(function(sum,r){
+                  return sum + (r.months[ym] || 0); }, 0)));
+              }),
+              h("td",null, fmtEUR(grand)),
+              h("td",null,"100%")))))));
   }
 
   // ----- transactions -----
@@ -1788,22 +1420,6 @@
          ahead.length + " more month" + (ahead.length > 1 ? "s" : "") + " — see the Pool tab.")
     ]));
 
-    // per-month bars, when the whole year is in view
-    if (filters.month == null && base.length > 1){
-      card.append(h("div",{class:"section-label",style:{marginTop:"14px"}},"Month by month"));
-      base.forEach(function(r){
-        var mok = r.gap >= 0;
-        card.append(h("div",{class:"be-item"},
-          h("div",{class:"be-line"},
-            h("span",{class:"m"}, monthLabel(r.ym),
-              r.estimated ? h("span",{class:"badge",style:{marginLeft:"6px"}},"pool est.") : null),
-            h("span",{class:"g " + (mok ? "amt-pos" : "amt-neg")}, (mok ? "+" : "") + fmtEUR(r.gap))),
-          beBar(r.revenue, r.costs),
-          h("div",{class:"be-line sub"},
-            h("span",null, fmtEUR(r.revenue)),
-            h("span",null,"needs " + fmtEUR(r.costs)))));
-      });
-    }
     return card;
   }
 
@@ -2078,6 +1694,20 @@
   }
 
   function renderTransactions(){
+    // things that still need a human decision: no category yet, or a Friendship
+    // pool invoice with no month assigned
+    var review = data.transactions.filter(needsReview);
+    if (review.length){
+      var rv = h("div",{class:"card"},
+        h("h2",null,"Needs review (" + review.length + ")"),
+        h("p",{class:"muted small"},
+          "Set a category, and for Friendship pool invoices pick the month they cover (the \u201ccounts in\u201d box)."));
+      review.slice(0, 60).forEach(function(t){ rv.append(txRow(t)); });
+      if (review.length > 60) rv.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
+        "\u2026and " + (review.length - 60) + " more \u2014 use the filters below."));
+      APP.append(rv);
+    }
+
     var years = txYears();
     if (years.indexOf(filters.year) === -1) filters.year = years[0];
 
@@ -2226,176 +1856,6 @@
     );
   }
 
-  // ----- import -----
-  function renderImport(){
-    // review queue first — things that still need a human decision after an import
-    var review = data.transactions.filter(needsReview);
-    if (review.length){
-      var rv = h("div",{class:"card"},
-        h("h2",null,"Needs review (" + review.length + ")"),
-        h("p",{class:"muted small"},
-          "Set a category, and for Friendship pool invoices pick the month they cover (the “counts in” box)."));
-      review.slice(0, 60).forEach(function(t){ rv.append(txRow(t)); });
-      if (review.length > 60) rv.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
-        "…and " + (review.length-60) + " more — see the Transactions tab."));
-      APP.append(rv);
-    }
-
-    APP.append(h("div",{class:"card"},
-      h("h2",null,"Import data"),
-      h("p",{class:"muted small"},"Drop a file below — the app recognises which report it is:"),
-      h("ul",{class:"muted small",style:{margin:"6px 0 0",paddingLeft:"18px"}},
-        h("li",null, h("b",null,"Rabobank CSV")," (Payments → Download → CSV kommagescheiden) — bank costs & receipts. Overlapping exports are safe; duplicates are skipped."),
-        h("li",null, h("b",null,"Eversports revenue CSV")," — the app totals each invoice month and books your “Eversports (earned)” income for you."))));
-
-    var st = importState;
-
-    // result banners
-    if (st && st.result && st.result.kind === "eversports"){
-      APP.append(h("div",{class:"banner ok"},
-        "Saved " + st.result.wrote + " Eversports revenue row" + (st.result.wrote===1?"":"s") + " from " + st.filename + "."));
-    } else if (st && st.result){
-      var res = st.result;
-      APP.append(h("div",{class:"banner ok"},
-        "Imported " + st.filename + ": added " + res.added + ", skipped " + res.skipped + " duplicate" + (res.skipped===1?"":"s") + "."));
-      if (res.uncategorized > 0){
-        APP.append(h("div",{class:"banner"},
-          res.uncategorized + " transaction" + (res.uncategorized===1?" is":"s are") + " uncategorized. ",
-          h("a",{class:"link",href:"#",onclick:function(e){
-            e.preventDefault();
-            filters.uncategorizedOnly = true; filters.categoryId = ""; filters.search = "";
-            nav("transactions");
-          }},"Review them →")));
-      }
-    }
-
-    // dropzone (both file types)
-    var fileInput = h("input",{type:"file",accept:".csv,text/csv",style:{display:"none"}});
-    fileInput.addEventListener("change", function(){ handleFile(fileInput.files[0]); fileInput.value = ""; });
-    var dz = h("div",{class:"dropzone"},
-      icon("import","dz-icon"),
-      h("div",null, h("b",null,"Drop your Rabobank or Eversports CSV here")," or click to choose a file"));
-    dz.addEventListener("click", function(){ fileInput.click(); });
-    dz.addEventListener("dragover", function(e){ e.preventDefault(); dz.classList.add("over"); });
-    dz.addEventListener("dragleave", function(){ dz.classList.remove("over"); });
-    dz.addEventListener("drop", function(e){
-      e.preventDefault(); dz.classList.remove("over");
-      handleFile(e.dataTransfer.files && e.dataTransfer.files[0]);
-    });
-    APP.append(dz, fileInput);
-
-    if (!st) return;
-
-    if (st.errors.length){
-      var eb = h("div",{class:"card",style:{marginTop:"14px"}},
-        h("div",{class:"section-label",style:{display:"flex",alignItems:"center",gap:"6px"}},
-          icon("alert","warn-icon"), h("span",null,"Warnings (" + st.errors.length + ")")));
-      st.errors.slice(0,8).forEach(function(x){ eb.append(h("div",{class:"small",style:{color:"var(--warn)"}}, x)); });
-      if (st.errors.length > 8) eb.append(h("div",{class:"tiny muted"}, "…and " + (st.errors.length-8) + " more."));
-      APP.append(eb);
-    }
-
-    if (st.result) return;
-
-    // ----- Eversports revenue preview -----
-    if (st.kind === "eversports" && st.ev){
-      var ev = st.ev;
-      if (!ev.months.length) return;
-      var pv2 = h("div",{class:"card",style:{marginTop:"14px"}},
-        h("h2",null,"Eversports revenue — " + st.filename),
-        h("p",{class:"small muted"},
-          ev.lineCount + " invoice lines · total " + fmtEUR(ev.total_cents) +
-          " · grouped into " + ev.months.length + " month" + (ev.months.length===1?"":"s")));
-      var tbl2 = h("table",{class:"pl-table"},
-        h("thead",null,h("tr",null,
-          h("th",{style:{textAlign:"center"}},"Use"), h("th",null,"Invoice month"),
-          h("th",null,"Revenue"), h("th",{style:{textAlign:"left"}},"Counts in"), h("th",{style:{textAlign:"left"}},"Status"))));
-      var tb2 = h("tbody");
-      ev.months.forEach(function(mo){
-        var chk = h("input",{type:"checkbox"}); chk.checked = mo.include;
-        chk.addEventListener("change", function(){ mo.include = chk.checked; });
-        var sep = preseasonOption(mo.month), countsCell;
-        if (sep){
-          var sel = h("select",{class:"small"},
-            h("option",{value:mo.month}, monthLabel(mo.month) + " (in-season)"),
-            h("option",{value:sep}, monthLabel(sep) + " (pre-season)"));
-          sel.value = mo.countsIn;
-          sel.addEventListener("change", function(){
-            mo.countsIn = sel.value;
-            mo.existing = findEarnedRow(mo.month);
-            mo.existingCents = mo.existing ? mo.existing.amount_cents : null;
-            mo.include = !mo.existing || mo.gross_cents >= mo.existing.amount_cents;
-            render();
-          });
-          countsCell = sel;
-        } else {
-          countsCell = h("span",{class:"small muted"}, monthLabel(mo.month));
-        }
-        var status, warn = false;
-        if (!mo.existing) status = "new row";
-        else if (mo.gross_cents === mo.existingCents) status = "no change";
-        else if (mo.gross_cents < mo.existingCents){ status = "⚠ below current " + fmtEUR(mo.existingCents) + " — partial export?"; warn = true; }
-        else status = "update " + fmtEUR(mo.existingCents) + " → " + fmtEUR(mo.gross_cents);
-        tb2.append(h("tr",null,
-          h("td",{style:{textAlign:"center"}}, chk),
-          h("td",null, monthLabel(mo.month)),
-          h("td",null, fmtEUR(mo.gross_cents)),
-          h("td",{style:{textAlign:"left"}}, countsCell),
-          h("td",{class:"small", style: warn ? {color:"var(--warn)"} : null}, status)
-        ));
-      });
-      tbl2.append(tb2);
-      pv2.append(h("div",{class:"scroll-x"}, tbl2));
-      pv2.append(h("p",{class:"tiny muted",style:{marginTop:"8px"}},
-        "Every month counts in itself. July and August also offer September, for summer "
-        + "purchases made for the new season — pick it only if you want that month deferred. "
-        + "Untick a month to skip it (a partial export that would lower a month you've already booked "
-        + "is unticked for you)."));
-      pv2.append(h("div",{class:"row",style:{marginTop:"12px"}},
-        h("button",{class:"primary", disabled: st.busy, onclick:doEversportsImport}, st.busy ? "Saving…" : "Save revenue"),
-        h("button",{class:"ghost", disabled: st.busy, onclick:function(){ importState = null; render(); }},"Cancel")));
-      APP.append(pv2);
-      return;
-    }
-
-    // ----- Rabobank transactions preview -----
-    if (!st.rows.length) return;
-    var rules = sortedRules();
-    var withCat = st.rows.map(function(t){
-      var r = matchRule(t, rules);
-      return { tx:t, cat: r ? r.category_id : null, shifted: !!(r && r.shift_months) };
-    });
-    var nUncat = withCat.filter(function(x){ return x.cat == null; }).length;
-    var t = totals(st.rows);
-    var dates = st.rows.map(function(x){ return x.booking_date; }).sort();
-
-    var pv = h("div",{class:"card",style:{marginTop:"14px"}},
-      h("h2",null,"Preview — " + st.filename),
-      h("p",{class:"small muted"},
-        st.rows.length + " rows · " + fmtDate(dates[0]) + " → " + fmtDate(dates[dates.length-1]) +
-        " · in " + fmtEUR(t.income) + " · out " + fmtEUR(t.expense) +
-        (nUncat ? " · " + nUncat + " would be uncategorized" : " · all rows matched a rule")));
-    var tbl = h("table",{class:"preview-table"},
-      h("thead",null,h("tr",null,["Date","Counterparty","Description","Amount","Category"].map(function(x){ return h("th",null,x); }))));
-    var tb = h("tbody");
-    withCat.slice(0,15).forEach(function(x){
-      tb.append(h("tr",null,
-        h("td",null,fmtDate(x.tx.booking_date)),
-        h("td",null,x.tx.counterparty_name),
-        h("td",null,x.tx.description),
-        h("td",{class: x.tx.amount_cents>=0 ? "amt-pos" : "amt-neg"}, fmtEUR(x.tx.amount_cents)),
-        h("td",null, x.cat == null ? h("span",{class:"badge warn"},"review") : catName(x.cat) + (x.shifted ? " (prev. month)" : ""))
-      ));
-    });
-    tbl.append(tb);
-    pv.append(h("div",{class:"scroll-x"}, tbl));
-    if (st.rows.length > 15) pv.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},"…showing first 15 of " + st.rows.length + " rows."));
-    pv.append(h("div",{class:"row",style:{marginTop:"12px"}},
-      h("button",{class:"primary", disabled: st.busy, onclick:doImport}, st.busy ? "Importing…" : "Import " + st.rows.length + " rows"),
-      h("button",{class:"ghost", disabled: st.busy, onclick:function(){ importState = null; render(); }},"Cancel")));
-    APP.append(pv);
-  }
-
   // ----- settings -----
   function renderSettings(){
     // --- categories ---
@@ -2495,18 +1955,6 @@
         mutate(function(){ return sb.from("rules").insert({ keyword:v, match_field:"any", category_id:Number(ncat.value), priority:100 }); });
       }},"+ Add rule")));
     APP.append(rc);
-
-    // --- import history ---
-    var ic = h("div",{class:"card"});
-    ic.append(h("h2",null,"Import history"));
-    if (!data.imports.length) ic.append(h("div",{class:"muted small"},"No imports yet."));
-    data.imports.forEach(function(im){
-      ic.append(h("div",{class:"editline"},
-        h("span",{class:"small",style:{flex:"1"}}, im.filename),
-        h("span",{class:"tiny muted"}, "+" + im.added_count + " / " + im.skipped_count + " skipped"),
-        h("span",{class:"tiny muted"}, new Date(im.imported_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}))));
-    });
-    APP.append(ic);
   }
 
   // ---------- boot ----------
@@ -2544,9 +1992,6 @@
     }
     render();
     window.addEventListener("focus", refresh);
-    // repaint when the OS flips light/dark, so the charts change with the page
-    var dark = window.matchMedia("(prefers-color-scheme: dark)");
-    if (dark.addEventListener) dark.addEventListener("change", function(){ render(); });
   }
 
   boot();

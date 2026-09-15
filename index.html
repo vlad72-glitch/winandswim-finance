@@ -621,21 +621,6 @@
     var y = String(year);
     return data.transactions.filter(function(t){ return txDate(t).slice(0,4) === y; });
   }
-  function monthlySummary(year){
-    var m = [];
-    for (var i=0;i<12;i++) m.push({ income:0, expense:0, profit:0, margin:null });
-    txInYear(year).forEach(function(t){
-      if (!inPL(t)) return;
-      var mi = Number(txDate(t).slice(5,7)) - 1;
-      if (t.amount_cents > 0) m[mi].income += t.amount_cents;
-      else m[mi].expense += -t.amount_cents;
-    });
-    m.forEach(function(x){
-      x.profit = x.income - x.expense;
-      x.margin = x.income > 0 ? (x.profit / x.income) * 100 : null;
-    });
-    return m;
-  }
   function totals(txs){
     var income = 0, expense = 0;
     txs.forEach(function(t){
@@ -1018,10 +1003,16 @@
     charts = {};
   }
   function renderChart(id, cfg){
-    if (window.Chart && !Chart.defaults.__wsFont){
-      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-      Chart.defaults.font.size = 11;
-      Chart.defaults.__wsFont = true;
+    if (window.Chart){
+      if (!Chart.defaults.__wsFont){
+        Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+        Chart.defaults.font.size = 11;
+        Chart.defaults.__wsFont = true;
+      }
+      // Chart.js falls back to #666 for any label it draws itself — legends built by
+      // generateLabels never see plugins.legend.labels.color, so set the global too.
+      Chart.defaults.color = VIZ.text;
+      Chart.defaults.borderColor = VIZ.grid;
     }
     var el = document.getElementById(id);
     if (!el || !window.Chart) return;
@@ -1124,7 +1115,6 @@
     }
 
     var yearTx = txInYear(filters.year);
-    var summary = monthlySummary(filters.year);
     var ytd = totals(yearTx);
     var periodTx = filters.month == null ? yearTx
       : yearTx.filter(function(t){ return Number(txDate(t).slice(5,7)) - 1 === filters.month; });
@@ -1153,10 +1143,6 @@
     var beCard = breakEvenCard();
     if (beCard) APP.append(beCard);
 
-    // income vs expenses + profit (one shared EUR axis)
-    APP.append(h("div",{class:"card"},
-      h("div",{class:"section-label"},"Income vs expenses per month — " + filters.year),
-      h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-monthly"}))));
     // expense breakdown
     var breakdown = categoryBreakdown(periodTx);
     var bd = h("div",{class:"card"},
@@ -1171,29 +1157,6 @@
 
     // ---- Chart.js instances (canvases are now in the DOM) ----
     var eur = function(c){ return c / 100; };
-    renderChart("chart-monthly", {
-      data: {
-        labels: MONTHS,
-        datasets: [
-          { type:"bar", label:"Income", data: summary.map(function(m){ return eur(m.income); }),
-            backgroundColor: VIZ.income, borderRadius:4, borderSkipped:"start",
-            categoryPercentage:.72, barPercentage:.9 },
-          { type:"bar", label:"Expenses", data: summary.map(function(m){ return eur(m.expense); }),
-            backgroundColor: VIZ.expense, borderRadius:4, borderSkipped:"start",
-            categoryPercentage:.72, barPercentage:.9 },
-          { type:"line", label:"Profit", data: summary.map(function(m){ return eur(m.profit); }),
-            borderColor: VIZ.profit, backgroundColor: VIZ.profit,
-            borderWidth:2, pointRadius:3, pointHoverRadius:5, tension:.25 }
-        ]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        interaction:{ mode:"index", intersect:false },
-        plugins:{ legend:{ position:"bottom", labels:{ color:VIZ.text, usePointStyle:true, boxWidth:8 } },
-                  tooltip: tooltipEUR },
-        scales: baseScales(true)
-      }
-    });
     if (breakdown.length){
       renderChart("chart-categories", {
         type:"doughnut",
@@ -1216,7 +1179,7 @@
                 return d.labels.map(function(lbl, i){
                   return { text: lbl + "  " + fmtEUR(Math.round(d.datasets[0].data[i]*100)),
                     fillStyle: d.datasets[0].backgroundColor[i], strokeStyle:"transparent",
-                    pointStyle:"circle", index:i };
+                    fontColor: VIZ.text, pointStyle:"circle", index:i };
                 });
               } } },
             tooltip:{ callbacks:{ label:function(c){
@@ -1258,6 +1221,11 @@
         h("td",{class: profit >= 0 ? "amt-pos" : "amt-neg"}, fmtEUR(profit)),
         h("td",null, mg == null ? "—" : mg.toFixed(1) + "%"));
     }
+
+    // income vs expenses + profit, one shared EUR axis, across every month on record
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Income vs expenses per month"),
+      h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-monthly"}))));
 
     var tIn = 0, tOut = 0;
     months.forEach(function(ym){ tIn += byMonth[ym].income; tOut += byMonth[ym].expense; });
@@ -1319,6 +1287,38 @@
               }),
               h("td",null, fmtEUR(grand)),
               h("td",null,"100%")))))));
+
+    drawMonthlyChart(months, byMonth);
+  }
+
+  function drawMonthlyChart(months, byMonth){
+    var eur = function(c){ return c / 100; };
+    renderChart("chart-monthly", {
+      data: {
+        labels: months.map(monthShort),
+        datasets: [
+          { type:"bar", label:"Income",
+            data: months.map(function(ym){ return eur(byMonth[ym].income); }),
+            backgroundColor: VIZ.income, borderRadius:4, borderSkipped:"start",
+            categoryPercentage:.72, barPercentage:.9 },
+          { type:"bar", label:"Expenses",
+            data: months.map(function(ym){ return eur(byMonth[ym].expense); }),
+            backgroundColor: VIZ.expense, borderRadius:4, borderSkipped:"start",
+            categoryPercentage:.72, barPercentage:.9 },
+          { type:"line", label:"Profit",
+            data: months.map(function(ym){ return eur(byMonth[ym].income - byMonth[ym].expense); }),
+            borderColor: VIZ.profit, backgroundColor: VIZ.profit,
+            borderWidth:2, pointRadius:3, pointHoverRadius:5, tension:.25 }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:"index", intersect:false },
+        plugins:{ legend:{ position:"bottom", labels:{ color:VIZ.text, usePointStyle:true, boxWidth:8 } },
+                  tooltip: tooltipEUR },
+        scales: baseScales(true)
+      }
+    });
   }
 
   // ----- transactions -----

@@ -374,6 +374,17 @@
   .be-line{display:flex;justify-content:space-between;align-items:baseline;
     gap:var(--s3);font-variant-numeric:tabular-nums;margin-top:var(--s2);flex-wrap:wrap;}
   .be-line.sub>span{white-space:nowrap;}
+  .be-meta{margin-top:var(--s3);}
+  .note-toggle{margin-top:var(--s3);}
+  .note-toggle>summary{font-size:var(--fs-xs);color:var(--muted);cursor:pointer;
+    list-style:none;display:inline-flex;align-items:center;gap:5px;padding:2px 0;}
+  .note-toggle>summary::-webkit-details-marker{display:none;}
+  .note-toggle>summary::after{content:"";width:5px;height:5px;
+    border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+    transform:rotate(45deg) translateY(-1px);
+    transition:transform var(--t) var(--ease-out);}
+  .note-toggle[open]>summary::after{transform:rotate(-135deg) translateY(1px);}
+  @media (hover:hover){ .note-toggle>summary:hover{color:var(--ink-2);} }
   .be-line .m{font-weight:600;font-size:var(--fs-base);display:inline-flex;
     align-items:center;gap:var(--s2);}
   .be-line .g{font-weight:650;font-size:var(--fs-base);}
@@ -1071,6 +1082,14 @@
 
   // Revenue fills the bar; the notch is break-even. Both are scaled to whichever is bigger,
   // so a month that clears its costs shows the notch sitting inside a full green bar.
+  // Explanations live behind a toggle rather than on the screen: the numbers are
+  // what you read every day, the reasoning is what you read once.
+  function noteToggle(label, lines){
+    var d = h("details",{class:"note-toggle"}, h("summary",null,label));
+    lines.filter(Boolean).forEach(function(t){ d.append(h("div",{class:"pool-note"}, t)); });
+    return d;
+  }
+
   function beBar(revenue, costs, big){
     var max = Math.max(revenue, costs, 1);
     var ok = revenue >= costs;
@@ -1726,26 +1745,27 @@
       h("div",{class:"be-line sub"},
         h("span",null,"revenue " + fmtEUR(revenue)),
         h("span",null,"break-even " + fmtEUR(costs) +
-          (pct == null ? "" : "  ·  " + pct.toFixed(0) + "% covered"))));
+          (pct == null ? "" : " · " + pct.toFixed(0) + "%"))));
 
-    card.append(h("div",{class:"pool-note"},
-      "Break-even " + fmtEUR(costs) + " = pool " + fmtEUR(pool) + " + " + fmtEUR(other) +
-      " of other costs booked."));
+    // one badge carries the only caveat that changes how you read the figure
     if (stillEst)
-      card.append(h("div",{class:"pool-note"},
-        fmtEUR(stillEst) + " of that pool figure is the contract estimate for lanes already " +
-        "swum whose invoice hasn't arrived yet. The profit tile above doesn't count it, which " +
-        "is why this reads " + fmtEUR(stillEst) + " worse — this is the truer number."));
-    if (scope.filter(function(r){ return r.ym === nowYm; }).length)
-      card.append(h("div",{class:"pool-note"},
-        monthLabel(nowYm) + " is still running, so its other costs are only the bills booked " +
-        "so far and its break-even line will still move up."));
-    if (filters.month == null && ahead.length && !forecast){
-      var aheadCost = ahead.reduce(function(s,r){ return s + r.costs; }, 0);
-      card.append(h("div",{class:"pool-note"},
-        "Still ahead in " + filters.year + ": " + fmtEUR(aheadCost) + " of pool time across " +
-        ahead.length + " more month" + (ahead.length > 1 ? "s" : "") + " — see the Pool tab."));
-    }
+      card.append(h("div",{class:"be-meta"},
+        h("span",{class:"badge"}, fmtEUR(stillEst) + " pool estimated")));
+
+    var running = scope.filter(function(r){ return r.ym === nowYm; }).length;
+    var aheadCost = ahead.reduce(function(s,r){ return s + r.costs; }, 0);
+    card.append(noteToggle("How this is worked out", [
+      "Break-even " + fmtEUR(costs) + " = pool " + fmtEUR(pool) + " + " + fmtEUR(other) +
+        " of other costs booked.",
+      stillEst && fmtEUR(stillEst) + " of the pool figure is the contract estimate for lanes " +
+        "already swum whose invoice hasn't arrived. The profit tile doesn't count it yet, which " +
+        "is why this reads " + fmtEUR(stillEst) + " worse — this is the truer number.",
+      running && (monthLabel(nowYm) + " is still running, so it carries only the bills booked " +
+        "so far and its break-even line will still move up."),
+      (filters.month == null && ahead.length && !forecast) &&
+        ("Still ahead in " + filters.year + ": " + fmtEUR(aheadCost) + " of pool time across " +
+         ahead.length + " more month" + (ahead.length > 1 ? "s" : "") + " — see the Pool tab.")
+    ]));
 
     // per-month bars, when the whole year is in view
     if (filters.month == null && base.length > 1){
@@ -1885,11 +1905,12 @@
     APP.append(h("div",{class:"card"},
       h("div",{class:"section-label"},"What the pool costs each month — season " + cfg.season),
       h("div",{class:"scroll-x"}, tbl),
-      h("div",{class:"pool-note"},
-        "\"Estimate\" is the contract price for the sessions actually swum that month. " +
-        "\"Invoiced\" is what Friendship has billed for that month (the month the invoice covers, " +
-        "not when it was paid) — pool bills arrive 1–3 months late, so recent months read \"—\" " +
-        "until the invoice lands.")));
+      noteToggle("How to read this", [
+        "\"Estimate\" is the contract price for the sessions actually swum that month.",
+        "\"Invoiced\" is what Friendship billed for that month — the month the invoice covers, " +
+        "not when it was paid. Bills arrive 1–3 months late, so recent months read \"—\" until " +
+        "the invoice lands."
+      ])));
 
     APP.append(h("div",{class:"card"},
       h("div",{class:"section-label"},"Estimate vs invoiced"),

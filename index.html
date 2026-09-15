@@ -747,8 +747,10 @@
     return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2,"0");
   }
   function monthLabel(ym){ return MONTHS[Number(ym.slice(5,7)) - 1] + " " + ym.slice(0,4); }
-  // Off-season: purchases invoiced in July/August are for the September season → count in September.
-  function preseasonTarget(ym){
+  // Summer purchases are for the September season, so July/August are the two months
+  // where "count it in September instead" is a sensible option. It is only an OPTION:
+  // the default is always the invoice's own month, so each month shows its own selling.
+  function preseasonOption(ym){
     var m = ym.slice(5,7);
     return (m === "07" || m === "08") ? ym.slice(0,4) + "-09" : null;
   }
@@ -757,6 +759,10 @@
   // Sniff which kind of CSV was dropped from its header line.
   function detectFileKind(text){
     var first = (text.split(/\r?\n/)[0] || "").toLowerCase();
+    // Eversports has two revenue exports and they are not interchangeable. The books
+    // run on the invoice-based one; the payments one is cash-basis. Tell them apart
+    // before parsing, or a cash-basis file silently lands as earned revenue.
+    if (first.indexOf("paid at") !== -1 || first.indexOf("paid gross") !== -1) return "eversports-paid";
     if (first.indexOf("gross price") !== -1 || first.indexOf("invoice number") !== -1) return "eversports";
     if (first.indexOf("iban/bban") !== -1 || first.indexOf("seq no") !== -1 || first.indexOf("volgnr") !== -1) return "rabobank";
     return null;
@@ -784,7 +790,7 @@
       total += cents; lineCount++;
     }
     var months = Object.keys(byMonth).sort().map(function(ym){
-      var countsIn = preseasonTarget(ym) || ym;
+      var countsIn = ym;   // own month by default — never auto-deferred
       var existing = findEarnedRow(ym);
       return { month: ym, gross_cents: byMonth[ym], countsIn: countsIn,
                existing: existing, existingCents: existing ? existing.amount_cents : null,
@@ -1268,7 +1274,15 @@
     try{
       var text = decodeCSVFile(await file.arrayBuffer());
       var kind = detectFileKind(text);
-      if (kind === "eversports"){
+      if (kind === "eversports-paid"){
+        importState.kind = "eversports";
+        importState.ev = null;
+        importState.errors = [
+          "This is the Eversports payments export (\"Paid At\" / \"Paid Gross\") — money received, not revenue earned.",
+          "Two things go wrong if it is booked as earned revenue: invoices that are issued but not yet paid are missing entirely, and a direct debit counts in the month it clears rather than the month it covers.",
+          "Export the invoice-based revenue report instead — the one whose columns are \"Invoice Date\" and \"Gross Price\". That is the basis every other month in this app is on."
+        ];
+      } else if (kind === "eversports"){
         importState.kind = "eversports";
         var pe = parseEversportsCSV(text);
         importState.ev = pe.data;
@@ -2291,7 +2305,7 @@
       ev.months.forEach(function(mo){
         var chk = h("input",{type:"checkbox"}); chk.checked = mo.include;
         chk.addEventListener("change", function(){ mo.include = chk.checked; });
-        var sep = preseasonTarget(mo.month), countsCell;
+        var sep = preseasonOption(mo.month), countsCell;
         if (sep){
           var sel = h("select",{class:"small"},
             h("option",{value:mo.month}, monthLabel(mo.month) + " (in-season)"),

@@ -318,6 +318,16 @@
     line-height:1.55;text-wrap:pretty;max-width:68ch;}
   .pool-skip{display:flex;flex-wrap:wrap;gap:var(--s1);margin-top:var(--s1);}
   .poolrow{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;}
+  /* the pool tab carries the accent: water-blue bars, the current month lit up */
+  .tile .val.accent{color:var(--accent);}
+  .day-chip{display:inline-block;padding:1px var(--s2);border-radius:var(--r-full);
+    background:var(--accent-bg);color:var(--accent-ink);font-weight:600;
+    font-size:var(--fs-xs);line-height:1.6;}
+  .pool-table th.pool-bar,.pool-table td.pool-bar{width:40%;padding-right:0;}
+  .pool-table .bar-track{width:100%;}
+  .pool-table .bar-fill{background:var(--accent);}
+  .pool-table td.pool-amt{font-weight:600;}
+  .pool-table tr.now td:first-child{color:var(--accent-ink);font-weight:650;}
 
   /* ---------- break-even ---------- */
   .be-bar{position:relative;height:18px;background:var(--surface-3);
@@ -512,7 +522,18 @@
   var data = { categories:[], rules:[], transactions:[] };
   var view = { name:"dashboard" };
   var now = new Date();
-  var filters = { year: now.getFullYear(), month: null, categoryId: "", search: "", uncategorizedOnly: false };
+  // Opens on the current month, never the whole year.
+  var filters = { year: now.getFullYear(), month: now.getMonth(), categoryId: "", search: "", uncategorizedOnly: false };
+  // An installed app can sit in the background for days; when it comes back in a new
+  // calendar month, the picker moves to that month too. Returns true when it moved.
+  var openedYm = now.getFullYear() * 12 + now.getMonth();
+  function followCalendar(){
+    var d = new Date(), ym = d.getFullYear() * 12 + d.getMonth();
+    if (ym === openedYm) return false;
+    now = d; openedYm = ym;
+    filters.year = d.getFullYear(); filters.month = d.getMonth();
+    return true;
+  }
   var txLimit = 100;
   var charts = {};
   var loginError = "";
@@ -911,6 +932,7 @@
 
   var refreshing = false;
   async function refresh(){
+    followCalendar();
     if (!sb || !session || refreshing) return;
     var ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) return;
@@ -1436,12 +1458,15 @@
     });
     dows.sort(function(a,b){ return ((a+6)%7) - ((b+6)%7); });
 
-    var seasonNet   = plan.totalNet;
-    // sum the month rows rather than grossing up the season net, so btw rounding
-    // can never leave the table's total off by a cent from its own rows
-    var seasonGross = plan.months.reduce(function(s,m){ return s + poolGross(m.netCents, cfg); }, 0);
-    var invoiced    = plan.months.reduce(function(s,m){ return s + (actual[m.ym] || 0); }, 0);
-    var thisMonth   = plan.byMonth[thisYm];
+    // One figure per month: the contract price, until a pool row is booked to that month
+    // (the estimate itself, or Friendship's invoice once it's paid) — then that amount.
+    var rows = plan.months.map(function(m){
+      return { m:m, cents: actual[m.ym] > 0 ? actual[m.ym] : poolGross(m.netCents, cfg) };
+    });
+    // sum the month rows, so btw rounding can never leave the total a cent off its own rows
+    var seasonCents = rows.reduce(function(s,r){ return s + r.cents; }, 0);
+    var maxCents    = rows.reduce(function(s,r){ return Math.max(s, r.cents); }, 0) || 1;
+    var thisRow     = rows.filter(function(r){ return r.m.ym === thisYm; })[0];
 
     function tile(lbl, val, cls, sub){
       return h("div",{class:"tile"},
@@ -1450,13 +1475,11 @@
         h("div",{class:"sub"}, sub));
     }
     APP.append(h("div",{class:"tiles"},
-      tile("This month", thisMonth ? fmtEUR(poolGross(thisMonth.netCents, cfg)) : "—",
-        "", thisMonth ? monthLabel(thisYm) + " · " + thisMonth.sessions + " sessions · " + thisMonth.hours + "h"
-                      : "outside the season"),
-      tile("Season total", fmtEUR(seasonGross), "",
-        plan.totalHours + " pool hours · " + plan.totalSessions + " sessions"),
-      tile("Invoiced so far", fmtEUR(invoiced), "",
-        invoiced ? "booked to season months" : "no pool invoices booked yet")
+      tile("This month", thisRow ? fmtEUR(thisRow.cents) : "—", thisRow ? "accent" : "",
+        thisRow ? monthLabel(thisYm) + " · " + thisRow.m.sessions + " sessions · " + thisRow.m.hours + "h"
+                : "outside the season"),
+      tile("Season total", fmtEUR(seasonCents), "",
+        plan.totalHours + " pool hours · " + plan.totalSessions + " sessions")
     ));
 
     if (!plan.months.length){
@@ -1475,7 +1498,7 @@
       h("tbody",null,
         (cfg.slots || []).map(function(s){
           return h("tr",null,
-            h("td",null, DOW_NAMES[Number(s.dow)]),
+            h("td",null, h("span",{class:"day-chip"}, DOW_NAMES[Number(s.dow)])),
             h("td",null, s.time || "—"),
             h("td",{class:"col-detail"}, String(s.lanes)),
             h("td",{class:"col-detail"}, String(s.hours)),
@@ -1497,28 +1520,25 @@
         " · " + fmtDate(cfg.start) + " – " + fmtDate(cfg.end) +
         (refs.length ? " · reservations " + refs.map(function(r){ return "#" + r; }).join(", ") : "") + ".")));
 
-    // ---- month by month ----
-    var body = plan.months.map(function(m){
-      var est = poolGross(m.netCents, cfg);
-      var act = actual[m.ym] || 0;
-      var diff = act - est;
+    // ---- month by month: the bar shows each month against the dearest one ----
+    var body = rows.map(function(r){
+      var m = r.m;
       return h("tr",{class: m.ym === thisYm ? "now" : ""},
         h("td",null, monthLabel(m.ym)),
-        dows.map(function(d){ return h("td",{class:"col-detail"}, m.perDow[d] ? String(m.perDow[d]) : "·"); }),
-        h("td",{class:"col-detail"}, String(m.hours)),
-        h("td",null, fmtEUR(est)),
-        h("td",{class: act ? "" : "muted"}, act ? fmtEUR(act) : "—"),
-        h("td",{class: !act ? "muted" : (diff > 0 ? "amt-neg" : diff < 0 ? "amt-pos" : "")},
-          act ? (diff > 0 ? "+" : "") + fmtEUR(diff) : "—"));
+        dows.map(function(d){ return h("td",{class:"col-detail muted"}, m.perDow[d] ? String(m.perDow[d]) : "·"); }),
+        h("td",{class:"col-detail muted"}, String(m.hours)),
+        h("td",{class:"pool-bar","aria-hidden":"true"},
+          h("div",{class:"bar-track"},
+            h("div",{class:"bar-fill",style:{width: Math.max(2, Math.round(r.cents / maxCents * 100)) + "%"}}))),
+        h("td",{class:"pool-amt"}, fmtEUR(r.cents)));
     });
     var tbl = h("table",{class:"pl-table pool-table"},
       h("thead",null,h("tr",null,
         h("th",null,"Month"),
         dows.map(function(d){ return h("th",{class:"col-detail"}, DOW_SHORT[d]); }),
         h("th",{class:"col-detail"},"Hours"),
-        h("th",null,"Estimate"),
-        h("th",null,"Invoiced"),
-        h("th",null,"Diff"))),
+        h("th",{class:"pool-bar"},""),
+        h("th",null,"Rent"))),
       h("tbody",null, body,
         h("tr",{class:"total"},
           h("td",null,"Season"),
@@ -1527,23 +1547,17 @@
             return h("td",{class:"col-detail"}, String(n));
           }),
           h("td",{class:"col-detail"}, String(plan.totalHours)),
-          h("td",null, fmtEUR(seasonGross)),
-          h("td",{class: invoiced ? "" : "muted"}, invoiced ? fmtEUR(invoiced) : "—"),
-          h("td",null,""))
+          h("td",{class:"pool-bar"},""),
+          h("td",{class:"pool-amt"}, fmtEUR(seasonCents)))
       ));
     APP.append(h("div",{class:"card"},
       h("div",{class:"section-label"},"What the pool costs each month — season " + cfg.season),
       h("div",{class:"scroll-x"}, tbl),
       noteToggle("How to read this", [
-        "\"Estimate\" is the contract price for the sessions actually swum that month.",
-        "\"Invoiced\" is what Friendship billed for that month — the month the invoice covers, " +
-        "not when it was paid. Bills arrive 1–3 months late, so recent months read \"—\" until " +
-        "the invoice lands."
+        "Each month is the contract price for the sessions swum that month" +
+        (vat ? ", plus " + vat + "% btw." : ", excl. btw."),
+        "When Friendship's invoice for a month is paid, its exact amount replaces that figure."
       ])));
-
-    APP.append(h("div",{class:"card"},
-      h("div",{class:"section-label"},"Estimate vs invoiced"),
-      h("div",{class:"chart-box tall"}, h("canvas",{id:"chart-pool"}))));
 
     // ---- days we don't pay for ----
     if (plan.skipped.length){
@@ -1561,27 +1575,6 @@
     }
 
     APP.append(renderPoolEditor(cfg));
-
-    // ---- chart ----
-    renderChart("chart-pool", {
-      type: "bar",
-      data: {
-        labels: plan.months.map(function(m){ return monthLabel(m.ym); }),
-        datasets: [
-          { label:"Estimate", data: plan.months.map(function(m){ return poolGross(m.netCents, cfg) / 100; }),
-            backgroundColor: VIZ.expense, borderRadius:4, categoryPercentage:.72, barPercentage:.9 },
-          { label:"Invoiced", data: plan.months.map(function(m){ return (actual[m.ym] || 0) / 100; }),
-            backgroundColor: VIZ.muted, borderRadius:4, categoryPercentage:.72, barPercentage:.9 }
-        ]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        interaction:{ mode:"index", intersect:false },
-        plugins:{ legend:{ position:"bottom", labels:{ color:VIZ.text, usePointStyle:true, boxWidth:8 } },
-                  tooltip: tooltipEUR },
-        scales: baseScales(true)
-      }
-    });
   }
 
   function renderPoolEditor(cfg){
@@ -1984,6 +1977,10 @@
     }
     render();
     window.addEventListener("focus", refresh);
+    // iOS home-screen apps resume without a focus event
+    document.addEventListener("visibilitychange", function(){
+      if (document.visibilityState === "visible" && followCalendar() && session) render();
+    });
   }
 
   boot();

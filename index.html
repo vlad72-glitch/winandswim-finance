@@ -565,6 +565,14 @@
   // settle income counted elsewhere) are shown in lists but never hit profit math.
   function catExcluded(id){ var c = catById(id); return !!(c && c.exclude_from_pl); }
   function inPL(t){ return !catExcluded(t.category_id); }
+  // Which side of the P&L a row lands on goes by its category, not its sign: money back in
+  // a cost category (an insurance refund, a cancelled job ad, a bank credit) lowers that
+  // cost instead of showing up as income. Only rows with no category go by their sign.
+  // Profit is the same either way; this keeps a refund from inflating income AND costs.
+  function isCost(t){
+    var c = catById(t.category_id);
+    return c ? c.kind === "expense" : t.amount_cents < 0;
+  }
   // Flag rows that need a human decision after import: uncategorized, or a Friendship
   // pool invoice whose covered month isn't set yet (pool bills are paid with a variable lag).
   function needsReview(t){
@@ -643,16 +651,17 @@
     var income = 0, expense = 0;
     txs.forEach(function(t){
       if (!inPL(t)) return;
-      if (t.amount_cents > 0) income += t.amount_cents; else expense += -t.amount_cents;
+      if (isCost(t)) expense += -t.amount_cents; else income += t.amount_cents;
     });
     var profit = income - expense;
     return { income:income, expense:expense, profit:profit, margin: income > 0 ? (profit/income)*100 : null };
   }
-  // expense totals per category, sorted desc, tail beyond 7 folded into "Other"
+  // expense totals per category (net of refunds), sorted desc, tail beyond 7 folded into
+  // "Other". A category whose refunds outweigh its costs has no slice to draw, so it's left out.
   function categoryBreakdown(txs){
     var by = {};
     txs.forEach(function(t){
-      if (t.amount_cents >= 0 || !inPL(t)) return;
+      if (!inPL(t) || !isCost(t)) return;
       var k = t.category_id == null ? "null" : String(t.category_id);
       by[k] = (by[k] || 0) + (-t.amount_cents);
     });
@@ -660,7 +669,8 @@
       return { categoryId: k === "null" ? null : Number(k),
                label: k === "null" ? "Uncategorized" : catName(Number(k)),
                total: by[k] };
-    }).sort(function(a,b){ return b.total - a.total; });
+    }).filter(function(x){ return x.total > 0; })
+      .sort(function(a,b){ return b.total - a.total; });
     if (items.length > 8){
       var head = items.slice(0,7);
       var rest = items.slice(7).reduce(function(s,x){ return s + x.total; }, 0);
@@ -669,29 +679,37 @@
     }
     return items;
   }
-  // Full (uncollapsed) expense breakdown for a set of transactions — every category, biggest first.
+  // Full (uncollapsed) expense breakdown for a set of transactions — every category, net of
+  // refunds, biggest first. A category whose refunds outweigh its costs comes out negative.
   function expenseBreakdownFull(txs){
     var by = {};
     txs.forEach(function(t){
-      if (t.amount_cents >= 0 || !inPL(t)) return;
+      if (!inPL(t) || !isCost(t)) return;
       var k = t.category_id == null ? "null" : String(t.category_id);
       by[k] = (by[k] || 0) + (-t.amount_cents);
     });
     return Object.keys(by).map(function(k){
       return { label: k === "null" ? "Uncategorized" : catName(Number(k)), total: by[k] };
-    }).sort(function(a,b){ return b.total - a.total; });
+    }).filter(function(x){ return x.total !== 0; })
+      .sort(function(a,b){ return b.total - a.total; });
   }
   // Readable expense table (Expense | Amount | Share-bar) for the selected period — reads top-to-bottom, no side scroll.
+  // The total is net, so it matches the Expenses tile; shares are of what was actually spent.
   function expenseTable(txs){
     var items = expenseBreakdownFull(txs);
     if (!items.length) return h("div",{class:"empty"},"No expenses in this period.");
     var grand = items.reduce(function(s,x){ return s + x.total; }, 0);
+    var spent = items.reduce(function(s,x){ return s + Math.max(0, x.total); }, 0);
     return h("table",{class:"pl-table exp-table"},
       h("thead",null,h("tr",null,
         h("th",null,"Expense"), h("th",null,"Amount"), h("th",{class:"share"},"Share"))),
       h("tbody",null,
         items.map(function(x){
-          var pct = grand ? x.total / grand * 100 : 0;
+          if (x.total < 0) return h("tr",null,
+            h("td",null, x.label),
+            h("td",{class:"amt-pos"}, fmtEUR(x.total)),
+            h("td",{class:"share muted"}, "money back"));
+          var pct = spent ? x.total / spent * 100 : 0;
           return h("tr",null,
             h("td",null, x.label),
             h("td",null, fmtEUR(x.total)),
@@ -867,7 +885,7 @@
       var ym = txDate(t).slice(0,7);
       if (ym.slice(0,4) !== y) return;
       var r = row(ym);
-      if (t.amount_cents >= 0) r.revenue += t.amount_cents;
+      if (!isCost(t)) r.revenue += t.amount_cents;
       else if (poolIds.indexOf(t.category_id) > -1) r.poolActual += -t.amount_cents;
       else r.other += -t.amount_cents;
     });
@@ -1228,7 +1246,7 @@
       if (!inPL(t)) return;
       var m = byMonth[txDate(t).slice(0,7)];
       if (!m) return;
-      if (t.amount_cents > 0) m.income += t.amount_cents; else m.expense += -t.amount_cents;
+      if (isCost(t)) m.expense += -t.amount_cents; else m.income += t.amount_cents;
     });
     function marginOf(income, profit){ return income > 0 ? (profit / income) * 100 : null; }
     function moneyRow(label, income, expense, cls){
@@ -1265,7 +1283,7 @@
     // ---- where the money goes: category x month, whole history ----
     var rowsByCat = {};
     data.transactions.forEach(function(t){
-      if (t.amount_cents >= 0 || !inPL(t)) return;
+      if (!inPL(t) || !isCost(t)) return;
       var ym = txDate(t).slice(0,7);
       var key = t.category_id == null ? "u" : String(t.category_id);
       var r = rowsByCat[key] || (rowsByCat[key] = {

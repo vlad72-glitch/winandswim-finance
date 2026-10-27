@@ -56,6 +56,22 @@ alter table public.transactions add column if not exists report_date date;
 alter table public.rules add column if not exists shift_months int not null default 0;
 alter table public.categories add column if not exists exclude_from_pl boolean not null default false;
 
+-- btw (Oct 2026, when Win and Swim left the KOR). A category's vat_code is the default for
+-- its rows; a transaction's vat_code overrides it; vat_cents pins the exact btw on one row
+-- (e.g. the month the KOR ended, when only part of the month carries btw).
+-- Codes: none, nl9 / nl21 (btw included in the amount), rc_eu / rc_world (btw shifted to us).
+alter table public.categories   add column if not exists vat_code text not null default 'none';
+alter table public.transactions add column if not exists vat_code text;
+alter table public.transactions add column if not exists vat_cents bigint;
+do $$ begin
+  alter table public.categories add constraint categories_vat_code_check
+    check (vat_code in ('none','nl9','nl21','rc_eu','rc_world'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.transactions add constraint transactions_vat_code_check
+    check (vat_code is null or vat_code in ('none','nl9','nl21','rc_eu','rc_world'));
+exception when duplicate_object then null; end $$;
+
 create table if not exists public.imports (
   id            bigint generated always as identity primary key,
   filename      text not null,

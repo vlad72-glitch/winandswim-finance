@@ -100,7 +100,7 @@
      Desktop: a segmented control at the top of the content. */
   nav.tabs{display:flex;gap:var(--s1);}
   nav.tabs button{
-    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    flex:1 1 auto;display:flex;flex-direction:column;align-items:center;gap:3px;
     border:none;background:none;color:var(--muted);
     font-size:var(--fs-2xs);font-weight:600;letter-spacing:.005em;
     padding:var(--s2) 2px;border-radius:var(--r-md);position:relative;
@@ -108,6 +108,11 @@
   }
   nav.tabs button .icon{width:22px;height:22px;
     transition:transform var(--t) var(--ease-out);}
+  /* Six tabs share the width. Each starts from its own label's width and the spare room is
+     shared out, so "Transactions" gets what "Btw" doesn't need; only past that does a label
+     shorten instead of pushing the bar wider. */
+  nav.tabs button{min-width:0;}
+  nav.tabs button>span:not(.badge):not(.icon){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   nav.tabs button.active{color:var(--accent);}
   nav.tabs button.active .icon{transform:translateY(-1px);}
   nav.tabs button:active{transform:scale(.94);}
@@ -126,12 +131,14 @@
     nav.tabs{margin:0 0 var(--s5);padding:var(--s1);gap:2px;
       background:var(--surface-3);border-radius:var(--r-md);}
     nav.tabs button{flex-direction:row;gap:var(--s2);
-      font-size:var(--fs-sm);padding:var(--s2) var(--s4);border-radius:var(--r-sm);}
+      font-size:var(--fs-sm);padding:var(--s2) var(--s3);border-radius:var(--r-sm);}
     nav.tabs button .icon{width:16px;height:16px;}
     nav.tabs button.active{background:var(--surface);color:var(--accent);
       box-shadow:var(--shadow-sm);}
     nav.tabs button.active .icon{transform:none;}
   }
+  /* a narrow window can't fit six icon+label tabs in one row: the labels carry it alone */
+  @media (min-width:640px) and (max-width:799px){ nav.tabs button .icon{display:none;} }
   @media (hover:hover) and (pointer:fine){
     nav.tabs button:hover{color:var(--ink-2);}
     nav.tabs button.active:hover{color:var(--accent);}
@@ -313,6 +320,13 @@
   .bar-fill{height:100%;background:var(--viz-expense);border-radius:var(--r-full);}
   .bar-pct{width:36px;text-align:right;color:var(--muted);font-size:var(--fs-xs);}
 
+  /* ---------- btw ---------- */
+  .btw-table td.btw-code{font-weight:700;color:var(--accent-ink);width:3em;}
+  .btw-table th:nth-child(2),.btw-table td.btw-what{text-align:left;white-space:normal;
+    color:var(--ink-2);}
+  .btw-table tr.sub td{color:var(--muted);}
+  .vat-note{margin:calc(-1 * var(--s2)) 2px var(--s3);}
+
   /* ---------- pool ---------- */
   .pool-note{font-size:var(--fs-sm);color:var(--muted);margin-top:var(--s3);
     line-height:1.55;text-wrap:pretty;max-width:68ch;}
@@ -383,7 +397,9 @@
   @media (max-width:560px){
     .pl-table .col-detail{display:none;}
     .pool-table th,.pool-table td,
-    .exp-table th,.exp-table td{padding:var(--s2) var(--s1);font-size:var(--fs-xs);}
+    .exp-table th,.exp-table td,
+    .btw-table th,.btw-table td{padding:var(--s2) var(--s1);font-size:var(--fs-xs);}
+    .btw-table td.btw-code{width:2.2em;}
     /* On a phone the row wrapped but the NAME kept losing the fight to the two
        selects, so every row read "Evers…". Give the name its own line and let the
        controls share the one below. */
@@ -462,6 +478,7 @@
     settings:'<path d="M4 7h9M18.5 7H20M4 17h2.5M11.5 17H20"/>'
       + '<circle cx="15.7" cy="7" r="2.4"/><circle cx="9" cy="17" r="2.4"/>',
     analytics:'<path d="M3.5 3v16A1.5 1.5 0 0 0 5 20.5h15.5"/><path d="M7 15.5l4-4.8 3.3 2.9L20.5 7"/>',
+    btw:'<path d="M18.5 5.5l-13 13"/><circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="17" r="2.6"/>',
     close:'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
     edit:'<path d="M4.5 19.5h4L19 9a2.12 2.12 0 0 0-3-3L5.5 16.5v3Z"/><path d="M14.5 7.5 17.5 10.5"/>',
     plus:'<path d="M12 5.5v13M5.5 12h13"/>',
@@ -581,6 +598,48 @@
     if (c && c.name === "Pool rental" && /friendship/i.test(t.counterparty_name || "") && !t.report_date) return true;
     return false;
   }
+  // ---------- btw ----------
+  // Win and Swim was in the KOR (no btw charged, none deducted) until its 2026 turnover
+  // passed EUR 20.000. From the sale that crossed it, every sale carries btw and the btw on
+  // costs can be deducted. VAT_SINCE is that day; while it is null the app reads exactly as
+  // it did under the KOR. A row's btw comes from its own vat_code, else its category's.
+  // 2026-10-04: Eversports invoice 2000524 took 2026 turnover from EUR 19.907,20 to 20.002,15.
+  var VAT_SINCE = "2026-10-04";
+  var VAT_CODES = {
+    none:     { label:"no btw",                             short:"no btw" },
+    nl9:      { label:"9% btw included",                    short:"btw 9%",  rate:9 },
+    nl21:     { label:"21% btw included",                   short:"btw 21%", rate:21 },
+    rc_eu:    { label:"btw shifted to us, EU supplier",     short:"verlegd EU",     rate:21, box:"4b" },
+    rc_world: { label:"btw shifted to us, non-EU supplier", short:"verlegd non-EU", rate:21, box:"4a" }
+  };
+  function catVatCode(id){ var c = catById(id); return c && VAT_CODES[c.vat_code] ? c.vat_code : "none"; }
+  function vatCode(t){ return VAT_CODES[t.vat_code] ? t.vat_code : catVatCode(t.category_id); }
+  // The btw in a row, with the row's sign (a refund carries negative btw), or null when it has
+  // none: transfers, KOR-period rows, rows coded "no btw". vat_cents on a row overrides the
+  // calculation, e.g. in the month the KOR ended, when only part of a month carries btw.
+  // Shifted btw (verlegd) isn't inside the amount: it comes on top and is declared and
+  // deducted in the same return, so it never changes what a row costs.
+  function vatOf(t){
+    if (!inPL(t)) return null;
+    var code = vatCode(t), c = VAT_CODES[code];
+    if (!c.rate) return null;
+    if (t.vat_cents == null && (!VAT_SINCE || txDate(t) < VAT_SINCE)) return null;
+    var sign = t.amount_cents < 0 ? -1 : 1, gross = Math.abs(t.amount_cents);
+    var vat = t.vat_cents != null ? Math.abs(Number(t.vat_cents))
+            : c.box ? Math.round(gross * c.rate / 100)
+            : Math.round(gross * c.rate / (100 + c.rate));
+    return { code:code, rate:c.rate, box:c.box || null,
+             vat: sign * vat, base: sign * (c.box ? gross : gross - vat) };
+  }
+  // What a row is worth to the business: its amount without the btw inside it. Every income,
+  // cost and profit figure in the app goes through this, so from VAT_SINCE they're excl. btw.
+  function netCents(t){
+    var v = vatOf(t);
+    return v && !v.box ? t.amount_cents - v.vat : t.amount_cents;
+  }
+  // A month that lies wholly after the KOR ended (its pool estimate then counts excl. btw).
+  function vatFullMonth(ym){ return !!VAT_SINCE && ym > VAT_SINCE.slice(0,7); }
+
   function sortedCats(){
     return data.categories.slice().sort(function(a,b){
       var ra = a.exclude_from_pl ? 2 : a.kind==="income" ? 0 : 1;
@@ -651,7 +710,7 @@
     var income = 0, expense = 0;
     txs.forEach(function(t){
       if (!inPL(t)) return;
-      if (isCost(t)) expense += -t.amount_cents; else income += t.amount_cents;
+      if (isCost(t)) expense += -netCents(t); else income += netCents(t);
     });
     var profit = income - expense;
     return { income:income, expense:expense, profit:profit, margin: income > 0 ? (profit/income)*100 : null };
@@ -663,7 +722,7 @@
     txs.forEach(function(t){
       if (!inPL(t) || !isCost(t)) return;
       var k = t.category_id == null ? "null" : String(t.category_id);
-      by[k] = (by[k] || 0) + (-t.amount_cents);
+      by[k] = (by[k] || 0) + (-netCents(t));
     });
     var items = Object.keys(by).map(function(k){
       return { categoryId: k === "null" ? null : Number(k),
@@ -686,7 +745,7 @@
     txs.forEach(function(t){
       if (!inPL(t) || !isCost(t)) return;
       var k = t.category_id == null ? "null" : String(t.category_id);
-      by[k] = (by[k] || 0) + (-t.amount_cents);
+      by[k] = (by[k] || 0) + (-netCents(t));
     });
     return Object.keys(by).map(function(k){
       return { label: k === "null" ? "Uncategorized" : catName(Number(k)), total: by[k] };
@@ -884,13 +943,14 @@
       if (!inPL(t)) return;
       var ym = txDate(t).slice(0,7);
       if (ym.slice(0,4) !== y) return;
-      var r = row(ym);
-      if (!isCost(t)) r.revenue += t.amount_cents;
-      else if (poolIds.indexOf(t.category_id) > -1) r.poolActual += -t.amount_cents;
-      else r.other += -t.amount_cents;
+      var r = row(ym), n = netCents(t);
+      if (!isCost(t)) r.revenue += n;
+      else if (poolIds.indexOf(t.category_id) > -1) r.poolActual += -n;
+      else r.other += -n;
     });
+    // once btw can be deducted, the pool's 9% comes back, so the estimate is the bare tariff
     plan.months.forEach(function(m){
-      if (m.ym.slice(0,4) === y) row(m.ym).poolEst = poolGross(m.netCents, cfg);
+      if (m.ym.slice(0,4) === y) row(m.ym).poolEst = vatFullMonth(m.ym) ? m.netCents : poolGross(m.netCents, cfg);
     });
     return Object.keys(rows).sort().map(function(ym){
       var r = rows[ym];
@@ -979,6 +1039,9 @@
   }
   function setTxReportDate(id, reportDate){
     return mutate(function(){ return sb.from("transactions").update({ report_date: reportDate }).eq("id", id); });
+  }
+  function setTxVatCode(id, code){
+    return mutate(function(){ return sb.from("transactions").update({ vat_code: code }).eq("id", id); });
   }
   function deleteTx(id){
     return mutate(function(){ return sb.from("transactions").delete().eq("id", id); });
@@ -1095,7 +1158,7 @@
 
     var reviewCount = data.transactions.filter(needsReview).length;
     APP.append(h("nav",{class:"tabs"},
-      ["dashboard","pool","analytics","transactions","settings"].map(function(n){
+      ["dashboard","pool","analytics","transactions","btw","settings"].map(function(n){
         var btn = h("button",{class: view.name===n ? "active" : "",
                               "aria-current": view.name===n ? "page" : false,
                               onclick:function(){ nav(n); }},
@@ -1109,6 +1172,7 @@
     if (view.name === "pool") return renderPool();
     if (view.name === "analytics") return renderAnalytics();
     if (view.name === "transactions") return renderTransactions();
+    if (view.name === "btw") return renderBtw();
     if (view.name === "settings") return renderSettings();
     return renderDashboard();
   }
@@ -1175,6 +1239,10 @@
         period.margin != null && period.margin >= 0 ? "amt-pos" : (period.margin == null ? "" : "amt-neg"),
         filters.month == null ? "" : "year: " + (ytd.margin == null ? "—" : ytd.margin.toFixed(1) + "%"))
     ));
+
+    if (periodTx.some(vatOf))
+      APP.append(h("p",{class:"tiny muted vat-note"},
+        "From " + fmtDate(VAT_SINCE) + " every amount here is excl. btw. The btw itself is on the Btw tab."));
 
     // are we earning enough to cover the pool + everything else?
     var beCard = breakEvenCard();
@@ -1246,7 +1314,7 @@
       if (!inPL(t)) return;
       var m = byMonth[txDate(t).slice(0,7)];
       if (!m) return;
-      if (isCost(t)) m.expense += -t.amount_cents; else m.income += t.amount_cents;
+      if (isCost(t)) m.expense += -netCents(t); else m.income += netCents(t);
     });
     function marginOf(income, profit){ return income > 0 ? (profit / income) * 100 : null; }
     function moneyRow(label, income, expense, cls){
@@ -1289,8 +1357,8 @@
       var r = rowsByCat[key] || (rowsByCat[key] = {
         label: t.category_id == null ? "Uncategorized" : catName(t.category_id),
         months: {}, total: 0 });
-      r.months[ym] = (r.months[ym] || 0) + (-t.amount_cents);
-      r.total += -t.amount_cents;
+      r.months[ym] = (r.months[ym] || 0) + (-netCents(t));
+      r.total += -netCents(t);
     });
     var catRows = Object.keys(rowsByCat).map(function(k){ return rowsByCat[k]; })
       .sort(function(a,b){ return b.total - a.total; });
@@ -1743,7 +1811,8 @@
       var txs = filteredTx();
       var t = totals(txs);
       countLbl.textContent = txs.length + " transaction" + (txs.length===1?"":"s") +
-        " · in " + fmtEUR(t.income) + " · out " + fmtEUR(t.expense);
+        " · in " + fmtEUR(t.income) + " · out " + fmtEUR(t.expense) +
+        (txs.some(vatOf) ? " (excl. btw)" : "");
       if (!txs.length){
         listBox.append(h("div",{class:"empty"},"No transactions match these filters."));
         return;
@@ -1798,15 +1867,30 @@
       var s = Number(msel.value);
       setTxReportDate(t.id, s === 0 ? null : shiftMonthISO(t.booking_date, s));
     });
+    // btw: only offered once the KOR is over (or when a row already carries its own code).
+    // "auto" follows the category; picking a code here is also how a hand-entered cost is
+    // marked as backed by a real invoice, which is what lets its btw be deducted.
+    var vsel = null, v = vatOf(t);
+    if (VAT_SINCE && inPL(t) && (txDate(t) >= VAT_SINCE || VAT_CODES[t.vat_code] || t.vat_cents != null)){
+      vsel = h("select",{class:"small", title:"btw on this row" +
+          (t.vat_cents != null ? " (fixed at " + fmtEUR(Math.abs(Number(t.vat_cents))) + ")" : "")},
+        h("option",{value:""}, "auto: " + VAT_CODES[catVatCode(t.category_id)].short),
+        Object.keys(VAT_CODES).map(function(k){ return h("option",{value:k}, VAT_CODES[k].short); }));
+      vsel.value = VAT_CODES[t.vat_code] ? t.vat_code : "";
+      vsel.addEventListener("change", function(){ setTxVatCode(t.id, vsel.value || null); });
+    }
     return h("div",{class:"tx-row"},
       h("span",{class:"tx-date"}, fmtDate(t.booking_date)),
       h("div",{class:"tx-main"},
         h("div",{class:"tx-name"}, t.counterparty_name || (t.source === "manual" ? "(manual entry)" : "(no name)"),
           t.source === "manual" ? h("span",{class:"badge",style:{marginLeft:"6px"}},"manual") : null,
           t.category_id == null ? h("span",{class:"badge warn",style:{marginLeft:"6px"}},"review") : null),
-        t.description ? h("div",{class:"tx-desc"}, t.description) : null),
+        t.description ? h("div",{class:"tx-desc"}, t.description) : null,
+        v ? h("div",{class:"tx-desc"}, (v.box ? "btw shifted to us " : "incl. btw ") + fmtEUR(Math.abs(v.vat)) +
+          (vatWaiting(t) ? " · not deductible until the invoice is in" : "")) : null),
       sel,
       msel,
+      vsel,
       h("span",{class:"tx-amt " + (t.amount_cents >= 0 ? "amt-pos" : "amt-neg")}, fmtEUR(t.amount_cents)),
       t.source === "manual" ? h("button",{class:"ghost small icon-btn","aria-label":"Edit",title:"Edit",
         onclick:function(){ editingTxId = t.id; addingManual = false; render(); }}, icon("edit")) : null,
@@ -1859,6 +1943,160 @@
     );
   }
 
+  // ----- btw return -----
+  // The numbers to type into the btw return (aangifte omzetbelasting) for one month or one
+  // quarter. Sales count in the month they're booked to (the Eversports revenue rows are
+  // already by invoice date). Btw on a cost can't be deducted before its invoice exists, so
+  // costs go by the day they were paid, never the month they cover; and a hand-entered cost
+  // (a pool estimate) waits until a btw code is set on the row itself, which is how a row is
+  // marked as backed by a real invoice.
+  var btwPeriod = null;   // { year, kind:"q"|"m", n }: n is the quarter (1-4) or the month (0-11)
+  var wholeEurFmt = new Intl.NumberFormat("nl-NL", { style:"currency", currency:"EUR",
+    minimumFractionDigits:0, maximumFractionDigits:0 });
+  function vatReturnDate(t){ return isCost(t) ? t.booking_date : txDate(t); }
+  function vatWaiting(t){
+    return isCost(t) && t.source === "manual" && !VAT_CODES[t.vat_code] && t.vat_cents == null;
+  }
+  function isoDay(d){
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function periodBounds(p){
+    var m0 = p.kind === "q" ? (p.n - 1) * 3 : p.n, len = p.kind === "q" ? 3 : 1;
+    return { from: isoDay(new Date(p.year, m0, 1)), to: isoDay(new Date(p.year, m0 + len, 0)),
+             due: isoDay(new Date(p.year, m0 + len + 1, 0)),
+             label: p.kind === "q" ? "Q" + p.n + " " + p.year : MONTHS[p.n] + " " + p.year };
+  }
+  function vatReturn(from, to){
+    function box(){ return { base:0, vat:0, rows:[] }; }
+    var r = { "1a":box(), "1b":box(), "4a":box(), "4b":box(), "5b":box(), waiting:[] };
+    data.transactions.forEach(function(t){
+      var v = vatOf(t);
+      if (!v) return;
+      var d = vatReturnDate(t);
+      if (d < from || d > to) return;
+      if (vatWaiting(t)){ r.waiting.push({ t:t, v:v }); return; }
+      if (v.box){
+        if (!isCost(t)) return;                 // shifted btw only ever comes with a purchase
+        var b = r[v.box];
+        b.base += -v.base; b.vat += -v.vat; b.rows.push({ t:t, v:v });
+        r["5b"].vat += -v.vat; r["5b"].rows.push({ t:t, v:v });
+      } else if (isCost(t)){
+        r["5b"].vat += -v.vat; r["5b"].rows.push({ t:t, v:v });
+      } else {
+        var s = v.rate === 21 ? r["1a"] : r["1b"];
+        s.base += v.base; s.vat += v.vat; s.rows.push({ t:t, v:v });
+      }
+    });
+    return r;
+  }
+  // The form takes whole euros and lets you round in your own favour: what you owe down,
+  // what you deduct up.
+  function eurDown(c){ return Math.floor(c / 100); }
+  function eurUp(c){ return Math.ceil(c / 100); }
+
+  function renderBtw(){
+    if (!VAT_SINCE){
+      APP.append(h("div",{class:"card stack"},
+        h("h2",null,"Btw"),
+        h("p",{class:"muted"},
+          "Btw starts on the day 2026 turnover passed €20.000, when the KOR ended. That day isn't set " +
+          "in the app yet, so nothing counts btw and every figure is still the amount paid.")));
+      return;
+    }
+    var nowD = new Date(), firstYear = Number(VAT_SINCE.slice(0,4)), years = [];
+    if (!btwPeriod) btwPeriod = { year: nowD.getFullYear(), kind:"q", n: Math.floor(nowD.getMonth() / 3) + 1 };
+    for (var y = Math.max(nowD.getFullYear(), btwPeriod.year); y >= firstYear; y--) years.push(y);
+    var ysel = h("select",null, years.map(function(y){ return h("option",{value:String(y)}, String(y)); }));
+    ysel.value = String(btwPeriod.year);
+    ysel.addEventListener("change", function(){ btwPeriod.year = Number(ysel.value); render(); });
+    var psel = h("select",null,
+      h("optgroup",{label:"Quarter"}, [1,2,3,4].map(function(q){ return h("option",{value:"q" + q}, "Q" + q); })),
+      h("optgroup",{label:"Month"}, MONTHS.map(function(m,i){ return h("option",{value:"m" + i}, m); })));
+    psel.value = btwPeriod.kind + btwPeriod.n;
+    psel.addEventListener("change", function(){
+      btwPeriod.kind = psel.value.charAt(0); btwPeriod.n = Number(psel.value.slice(1)); render();
+    });
+    APP.append(h("div",{class:"filters"}, ysel, psel));
+
+    var p = periodBounds(btwPeriod);
+    if (p.to < VAT_SINCE){
+      APP.append(h("div",{class:"card empty"},
+        p.label + " is before the KOR ended on " + fmtDate(VAT_SINCE) + ": no btw return for it."));
+      return;
+    }
+    var r = vatReturn(p.from, p.to), owed = ["1a","1b","4a","4b"];
+    var LABELS = {
+      "1a":"Sales at 21%", "1b":"Sales at 9%",
+      "4a":"Services from outside the EU, btw shifted to you",
+      "4b":"Services from EU countries, btw shifted to you",
+      "5b":"Btw you paid on costs (voorbelasting)" };
+    var form5a = owed.reduce(function(s,k){ return s + eurDown(r[k].vat); }, 0);
+    var form5b = eurUp(r["5b"].vat), form5c = form5a - form5b;
+    var exact = owed.reduce(function(s,k){ return s + r[k].vat; }, 0) - r["5b"].vat;
+    function line(code, label, base, vat, cls){
+      return h("tr", cls ? {class:cls} : null,
+        h("td",{class:"btw-code"}, code),
+        h("td",{class:"btw-what"}, label),
+        h("td",null, base == null ? "" : wholeEurFmt.format(base)),
+        h("td",null, wholeEurFmt.format(vat)));
+    }
+    APP.append(h("div",{class:"card"},
+      h("div",{class:"section-label"},"Btw return — " + p.label),
+      h("div",{class:"be-head" + (form5c < 0 ? " amt-pos" : "")},
+        form5c >= 0 ? "To pay " + wholeEurFmt.format(form5c) : "To get back " + wholeEurFmt.format(-form5c)),
+      h("div",{class:"scroll-x"},
+        h("table",{class:"pl-table btw-table"},
+          h("thead",null,h("tr",null,
+            h("th",null,"Box"), h("th",null,""), h("th",null,"Omzet"), h("th",null,"Btw"))),
+          h("tbody",null,
+            owed.map(function(k){ return line(k, LABELS[k], eurDown(r[k].base), eurDown(r[k].vat)); }),
+            line("5a","Btw you owe (the form adds this up)", null, form5a, "sub"),
+            line("5b", LABELS["5b"], null, form5b),
+            line("5c", form5c >= 0 ? "To pay" : "To get back", null, form5c, "total")))),
+      h("div",{class:"be-line sub"},
+        h("span",null,"In whole euros, as you type them"),
+        h("span",null,"File and pay by " + fmtDate(p.due))),
+      noteToggle("How this is worked out", [
+        "Btw counts from " + fmtDate(VAT_SINCE) + ", the day 2026 turnover passed €20.000. Earlier sales were " +
+          "KOR sales without btw, and costs that belong to that time carry no deductible btw either.",
+        "Sales count in the month they're booked to; Eversports revenue is booked by invoice date.",
+        "Btw on a cost counts in the period you paid it. The rules don't allow it before the invoice " +
+          "exists, and paying is never earlier than the invoice.",
+        "What you owe is rounded down and what you deduct rounded up, which the form allows. Exact: " +
+          (exact >= 0 ? "to pay " : "to get back ") + fmtEUR(Math.abs(exact)) + "."
+      ])));
+
+    function rowLine(x){
+      var t = x.t;
+      return h("div",{class:"tx-row"},
+        h("span",{class:"tx-date"}, fmtDate(vatReturnDate(t))),
+        h("div",{class:"tx-main"},
+          h("div",{class:"tx-name"}, t.counterparty_name || "(no name)"),
+          h("div",{class:"tx-desc"}, catName(t.category_id) + " · " + fmtEUR(t.amount_cents) +
+            " · " + VAT_CODES[x.v.code].short)),
+        h("span",{class:"tx-amt"}, fmtEUR(Math.abs(x.v.vat))));
+    }
+    if (r.waiting.length){
+      var wsum = r.waiting.reduce(function(s,x){ return s + -x.v.vat; }, 0);
+      APP.append(h("div",{class:"card"},
+        h("div",{class:"section-label"},"Not deductible yet — " + fmtEUR(wsum) + " btw"),
+        h("p",{class:"muted small"},
+          "Hand-entered costs, like the pool estimate, whose invoice hasn't been seen. Their btw counts " +
+          "once the real invoice is booked, in the period it's paid."),
+        r.waiting.map(rowLine)));
+    }
+    var det = h("div",{class:"card"}, h("div",{class:"section-label"},"Behind the numbers"));
+    ["1a","1b","4a","4b","5b"].forEach(function(k){
+      if (!r[k].rows.length) return;
+      var d = h("details",{class:"note-toggle"},
+        h("summary",null, k + " · " + r[k].rows.length + " row" + (r[k].rows.length === 1 ? "" : "s") +
+          " · btw " + fmtEUR(r[k].vat)));
+      r[k].rows.forEach(function(x){ d.append(rowLine(x)); });
+      det.append(d);
+    });
+    if (det.childNodes.length > 1) APP.append(det);
+  }
+
   // ----- settings -----
   function renderSettings(){
     // --- categories ---
@@ -1881,9 +2119,19 @@
           var v = inp.value.trim();
           if (v && v !== c.name) mutate(function(){ return sb.from("categories").update({ name:v }).eq("id", c.id); });
         });
+        // default btw for the category; a single row can still override it in Transactions
+        var vs = null;
+        if (!c.exclude_from_pl){
+          vs = h("select",{class:"small", title:"btw on this category's rows, unless a row says otherwise"},
+            Object.keys(VAT_CODES).map(function(k){ return h("option",{value:k}, VAT_CODES[k].short); }));
+          vs.value = catVatCode(c.id);
+          vs.addEventListener("change", function(){
+            mutate(function(){ return sb.from("categories").update({ vat_code: vs.value }).eq("id", c.id); });
+          });
+        }
         cc.append(h("div",{class:"editline"},
           h("span",{style:{display:"inline-block",width:"10px",height:"10px",borderRadius:"999px",background:catColor(c.id),flexShrink:"0"}}),
-          inp,
+          inp, vs,
           h("button",{class:"danger small icon-btn","aria-label":"Remove", onclick:function(){
             if (!confirm("Delete category \"" + c.name + "\"?\nIts transactions become uncategorized (they are not deleted). Rules pointing to it are removed.")) return;
             mutate(function(){ return sb.from("categories").delete().eq("id", c.id); });
@@ -1907,6 +2155,9 @@
       }},"+ Add")));
     cc.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
       "“Transfer” categories (owner money, loans, card-processor payouts) show in your transactions but are left out of income, expenses and profit."));
+    cc.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
+      "The btw box next to each category is its default. Set a category to btw only when every bill in it really carries that btw; " +
+      "anything else stays “no btw” and gets its code row by row once the invoice is seen."));
     APP.append(cc);
 
     // --- rules ---

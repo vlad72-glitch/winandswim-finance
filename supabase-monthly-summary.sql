@@ -2,7 +2,7 @@
 -- Win and Swim Finance: monthly_summary(), one month's totals for a report key
 --
 -- Lets a script without a login (Vlad's chief of staff) read ONE month's totals:
--- income, costs, profit and the btw due. Never individual transactions.
+-- income, costs, profit, investments and the btw due. Never individual transactions.
 -- The caller must pass a long random report key; only its SHA-256 hash is stored,
 -- in private.report_keys, which no API role can see.
 --
@@ -14,6 +14,9 @@
 -- ============================================================
 
 create extension if not exists pgcrypto with schema extensions;
+
+-- investment categories (see supabase-schema.sql); repeated here so this file runs on its own
+alter table public.categories add column if not exists is_investment boolean not null default false;
 
 -- ---------- key store: invisible to the API ----------
 -- The `private` schema isn't exposed by the Data API, and anon/authenticated get no
@@ -42,6 +45,8 @@ revoke all on table private.report_keys from public, anon, authenticated;
 --   * from 2026-10-04 (KOR ended) amounts are excl. btw: btw comes from the row's vat_code,
 --     else its category's; vat_cents on a row pins it; shifted btw (rc_eu/rc_world) never
 --     changes what a row costs                                               (vatOf, netCents)
+--   * investments: costs in categories marked is_investment (refunds lower them too);
+--     they stay inside costs and profit, operating_profit = profit + investments
 --   * btw_due is the month's exact btw, worked out like the Dashboard's btw for a quarter:
 --     sales by the month they count in, costs by the day they were paid, hand-entered costs
 --     without a btw code waiting (vatReturn). null for months before the KOR ended.
@@ -84,6 +89,7 @@ begin
            case when c.id is null then t.amount_cents < 0
                 else c.kind = 'expense' end                          as is_cost,
            coalesce(t.vat_code, c.vat_code, 'none')                  as code,
+           coalesce(c.is_investment, false)                          as is_investment,
            (t.source = 'manual' and t.vat_code is null
                                 and t.vat_cents is null)             as manual_uncoded
     from public.transactions t
@@ -116,6 +122,8 @@ begin
                                              and net.counts_in between m_start and m_end), 0) as income_c,
            coalesce(sum(-net.net_c) filter (where net.is_cost
                                              and net.counts_in between m_start and m_end), 0) as costs_c,
+           coalesce(sum(-net.net_c) filter (where net.is_cost and net.is_investment
+                                             and net.counts_in between m_start and m_end), 0) as invest_c,
            -- shifted btw nets to zero (declared and deducted together), so only btw inside
            -- an amount moves the total: sales add theirs, costs (negative btw) take theirs off
            coalesce(sum(net.vat_c) filter (where net.vat_c is not null
@@ -131,6 +139,8 @@ begin
            'income',  round(s.income_c / 100.0, 2),
            'costs',   round(s.costs_c / 100.0, 2),
            'profit',  round((s.income_c - s.costs_c) / 100.0, 2),
+           'investments',      round(s.invest_c / 100.0, 2),
+           'operating_profit', round((s.income_c - s.costs_c + s.invest_c) / 100.0, 2),
            'btw_due', case when m_end < vat_since then null else round(s.btw_c / 100.0, 2) end,
            -- last bank booking imported: a month after this date isn't fully in yet
            'bank_data_through', (select max(t.booking_date) from public.transactions t

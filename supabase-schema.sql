@@ -55,6 +55,10 @@ create table if not exists public.rules (
 alter table public.transactions add column if not exists report_date date;
 alter table public.rules add column if not exists shift_months int not null default 0;
 alter table public.categories add column if not exists exclude_from_pl boolean not null default false;
+-- investments (Nov 2026): cost categories Vlad chose to spend on (equipment, a campaign, a
+-- course), not running costs. They still count in profit; the Dashboard and monthly_summary()
+-- also give the profit before them.
+alter table public.categories add column if not exists is_investment boolean not null default false;
 
 -- btw (Oct 2026, when Win and Swim left the KOR). A category's vat_code is the default for
 -- its rows; a transaction's vat_code overrides it; vat_cents pins the exact btw on one row
@@ -131,3 +135,10 @@ begin
     values ('optisport', 'any', pool_rental_id, 10);
   end if;
 end $$;
+
+-- one "Investment" category to move chosen costs into, unless an investment category exists
+-- already (so a renamed or replaced one isn't brought back)
+insert into public.categories (name, kind, sort_order, is_investment)
+select 'Investment', 'expense', (select coalesce(max(sort_order), 0) + 1 from public.categories), true
+where not exists (select 1 from public.categories where is_investment)
+on conflict (name) do nothing;

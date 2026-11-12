@@ -232,7 +232,9 @@
   .tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;
     background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);
     box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:var(--s4);}
-  .tile{background:var(--surface);padding:var(--s4);}
+  .tile{background:var(--surface);padding:var(--s4);display:flex;flex-direction:column;}
+  /* a label that wraps to two lines must not push its figure below its neighbours' */
+  .tile .lbl{flex:1;}
   /* an odd last tile fills the row rather than leaving half of it empty */
   .tile:last-child:nth-child(odd){grid-column:1 / -1;}
   @media (min-width:640px){
@@ -580,6 +582,10 @@
   // Categories flagged exclude_from_pl (transfers, loans, card-processor payouts that
   // settle income counted elsewhere) are shown in lists but never hit profit math.
   function catExcluded(id){ var c = catById(id); return !!(c && c.exclude_from_pl); }
+  // Investment categories hold costs Vlad chose to make (equipment, a campaign, a course),
+  // not running costs. They count in Expenses and Profit like any cost; the Dashboard also
+  // shows the profit before them.
+  function catInvestment(id){ var c = catById(id); return !!(c && c.is_investment); }
   function inPL(t){ return !catExcluded(t.category_id); }
   // Which side of the P&L a row lands on goes by its category, not its sign: money back in
   // a cost category (an insurance refund, a cancelled job ad, a bank credit) lowers that
@@ -706,13 +712,18 @@
     return data.transactions.filter(function(t){ return txDate(t).slice(0,4) === y; });
   }
   function totals(txs){
-    var income = 0, expense = 0;
+    var income = 0, expense = 0, investment = 0;
     txs.forEach(function(t){
       if (!inPL(t)) return;
-      if (isCost(t)) expense += -netCents(t); else income += netCents(t);
+      if (isCost(t)){
+        expense += -netCents(t);
+        if (catInvestment(t.category_id)) investment += -netCents(t);
+      } else income += netCents(t);
     });
     var profit = income - expense;
-    return { income:income, expense:expense, profit:profit, margin: income > 0 ? (profit/income)*100 : null };
+    return { income:income, expense:expense, profit:profit, investment:investment,
+             beforeInvestment: profit + investment,
+             margin: income > 0 ? (profit/income)*100 : null };
   }
   // expense totals per category (net of refunds), sorted desc, tail beyond 7 folded into
   // "Other". A category whose refunds outweigh its costs has no slice to draw, so it's left out.
@@ -1034,7 +1045,17 @@
   }
 
   function setTxCategory(id, categoryId){
-    return mutate(function(){ return sb.from("transactions").update({ category_id: categoryId }).eq("id", id); });
+    var upd = { category_id: categoryId };
+    // Marking a cost as an investment only changes where it's reported, never its btw: a row
+    // that took its btw from its old category keeps that code when it moves to an investment
+    // category whose default differs.
+    var t = data.transactions.find(function(x){ return x.id === id; });
+    if (t && catInvestment(categoryId) && t.category_id != null && !catExcluded(t.category_id) &&
+        !VAT_CODES[t.vat_code]){
+      var was = vatOf(t), will = vatOf(Object.assign({}, t, { category_id: categoryId }));
+      if ((was ? was.code : "") !== (will ? will.code : "")) upd.vat_code = catVatCode(t.category_id);
+    }
+    return mutate(function(){ return sb.from("transactions").update(upd).eq("id", id); });
   }
   function setTxReportDate(id, reportDate){
     return mutate(function(){ return sb.from("transactions").update({ report_date: reportDate }).eq("id", id); });
@@ -1233,6 +1254,12 @@
       tile("Expenses " + periodLbl, fmtEUR(period.expense), "", filters.month == null ? "" : "year: " + fmtEUR(ytd.expense)),
       tile("Profit " + periodLbl, fmtEUR(period.profit), period.profit >= 0 ? "amt-pos" : "amt-neg",
         filters.month == null ? "" : "year: " + fmtEUR(ytd.profit)),
+      // profit + the period's investment costs, once any category is marked as investment
+      data.categories.some(function(c){ return c.is_investment; })
+        ? tile("Profit before investments " + periodLbl, fmtEUR(period.beforeInvestment),
+            period.beforeInvestment >= 0 ? "amt-pos" : "amt-neg",
+            "investments: " + fmtEUR(period.investment))
+        : null,
       tile("Margin " + periodLbl, period.margin == null ? "—" : period.margin.toFixed(1) + "%",
         period.margin != null && period.margin >= 0 ? "amt-pos" : (period.margin == null ? "" : "amt-neg"),
         filters.month == null ? "" : "year: " + (ytd.margin == null ? "—" : ytd.margin.toFixed(1) + "%"))
@@ -1432,7 +1459,8 @@
   function catSelect(current, opts){
     var groups = [
       { label:"Income",  test:function(c){ return !c.exclude_from_pl && c.kind==="income"; } },
-      { label:"Expense", test:function(c){ return !c.exclude_from_pl && c.kind==="expense"; } },
+      { label:"Expense", test:function(c){ return !c.exclude_from_pl && c.kind==="expense" && !c.is_investment; } },
+      { label:"Investment", test:function(c){ return !c.exclude_from_pl && c.kind==="expense" && c.is_investment; } },
       { label:"Transfers (not in profit)", test:function(c){ return c.exclude_from_pl; } }
     ];
     var sel = h("select", opts || null,
@@ -2082,12 +2110,14 @@
       null));
     var groups = [
       { label:"Income",  test:function(c){ return !c.exclude_from_pl && c.kind==="income"; } },
-      { label:"Expenses", test:function(c){ return !c.exclude_from_pl && c.kind==="expense"; } },
-      { label:"Transfers (not counted in profit)", test:function(c){ return c.exclude_from_pl; } }
+      { label:"Expenses", test:function(c){ return !c.exclude_from_pl && c.kind==="expense" && !c.is_investment; } },
+      { label:"Investments", optional:true,
+        test:function(c){ return !c.exclude_from_pl && c.kind==="expense" && c.is_investment; } },
+      { label:"Transfers (not counted in profit)", optional:true, test:function(c){ return c.exclude_from_pl; } }
     ];
     groups.forEach(function(g){
       var cs = sortedCats().filter(g.test);
-      if (!cs.length && g.label.indexOf("Transfers") === 0) return;
+      if (!cs.length && g.optional) return;
       cc.append(h("div",{class:"section-label",style:{marginTop:"12px"}}, g.label));
       cs.forEach(function(c){
         var inp = h("input",{type:"text",value:c.name});
@@ -2105,9 +2135,20 @@
             mutate(function(){ return sb.from("categories").update({ vat_code: vs.value }).eq("id", c.id); });
           });
         }
+        // a cost category can be marked as investment: costs chosen, not running costs
+        var inv = null;
+        if (!c.exclude_from_pl && c.kind === "expense"){
+          var cb = h("input",{type:"checkbox"});
+          cb.checked = !!c.is_investment;
+          cb.addEventListener("change", function(){
+            mutate(function(){ return sb.from("categories").update({ is_investment: cb.checked }).eq("id", c.id); });
+          });
+          inv = h("label",{class:"small muted row", title:"Count this category's costs as investments, not running costs",
+            style:{gap:"6px",alignItems:"center",cursor:"pointer"}}, cb, "investment");
+        }
         cc.append(h("div",{class:"editline"},
           h("span",{style:{display:"inline-block",width:"10px",height:"10px",borderRadius:"999px",background:catColor(c.id),flexShrink:"0"}}),
-          inp, vs,
+          inp, vs, inv,
           h("button",{class:"danger small icon-btn","aria-label":"Remove", onclick:function(){
             if (!confirm("Delete category \"" + c.name + "\"?\nIts transactions become uncategorized (they are not deleted). Rules pointing to it are removed.")) return;
             mutate(function(){ return sb.from("categories").delete().eq("id", c.id); });
@@ -2118,19 +2159,24 @@
     var newKind = h("select",{class:"small"},
       h("option",{value:"expense"},"Expense"),
       h("option",{value:"income"},"Income"),
+      h("option",{value:"investment"},"Investment (chosen, not a running cost)"),
       h("option",{value:"transfer"},"Transfer (not in profit)"));
     cc.append(h("div",{class:"row wrap",style:{marginTop:"10px"}},
       newName, newKind,
       h("button",{class:"small primary", onclick:function(){
         var v = newName.value.trim(); if (!v) { newName.focus(); return; }
         var max = data.categories.reduce(function(m,c){ return Math.max(m, c.sort_order); }, 0);
-        var isTransfer = newKind.value === "transfer";
-        mutate(function(){ return sb.from("categories").insert({
-          name:v, kind: isTransfer ? "expense" : newKind.value,
-          exclude_from_pl: isTransfer, sort_order:max+1 }); });
+        var isTransfer = newKind.value === "transfer", isInvestment = newKind.value === "investment";
+        var row = { name:v, kind: newKind.value === "income" ? "income" : "expense",
+                    exclude_from_pl: isTransfer, sort_order:max+1 };
+        if (isInvestment) row.is_investment = true;
+        mutate(function(){ return sb.from("categories").insert(row); });
       }},"+ Add")));
     cc.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
       "“Transfer” categories (owner money, loans, card-processor payouts) show in your transactions but are left out of income, expenses and profit."));
+    cc.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
+      "“Investment” categories are costs you chose to make (equipment, a campaign, a course), not running costs. " +
+      "They still count in Expenses and Profit; the Dashboard also shows the profit before them."));
     cc.append(h("div",{class:"tiny muted",style:{marginTop:"6px"}},
       "The btw box next to each category is its default. Set a category to btw only when every bill in it really carries that btw; " +
       "anything else stays “no btw” and gets its code row by row once the invoice is seen."));

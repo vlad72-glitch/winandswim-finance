@@ -74,6 +74,11 @@ counterparties (pool rental, insurance, …) are categorized automatically.
   Each row also has a **"counts in" month** — use it when an invoice is paid in a
   different month than the one it covers (e.g. pool rent for May paid in June).
   Rules can do this automatically ("month before" option in Settings).
+- **Investments** — a cost you chose to make (equipment, a campaign, a course) rather
+  than a running cost: give it the category **Investment** in Transactions, or tick
+  **investment** on a whole category in Settings. It still counts in Expenses and
+  Profit; the Dashboard adds a **Profit before investments** tile. Moving a row to an
+  investment category keeps its btw, so Profit itself doesn't change.
 - **Import** — upload new CSV exports.
 - **Settings** — categories, auto-categorization rules, import history.
 - **Add to phone**: open the site in Safari/Chrome → Share → **Add to Home Screen**.
@@ -93,12 +98,15 @@ database function `public.monthly_summary(p_month, p_key)`, defined in
 `supabase-monthly-summary.sql`. It returns aggregates only, never a transaction:
 
 ```json
-{"month":"2026-10","income":1234.56,"costs":987.65,"profit":246.91,"btw_due":45.67,"bank_data_through":"2026-11-03"}
+{"month":"2026-10","income":1234.56,"costs":987.65,"profit":246.91,"investments":100.00,"operating_profit":346.91,"btw_due":45.67,"bank_data_through":"2026-11-03"}
 ```
 
 - `income`, `costs`, `profit`: exactly the Dashboard tiles for that month (same
   "counts in" month, same excluded categories, refunds lowering their cost, and excl.
   btw from 4 Oct 2026).
+- `investments`: the month's costs in investment categories (already inside `costs`).
+  `operating_profit` = `profit` + `investments`, the Dashboard's "Profit before
+  investments" tile.
 - `btw_due`: the month's exact btw (positive = to pay), worked out the same way as the
   Dashboard's btw for a quarter; `null` for months before the KOR ended.
 - `bank_data_through`: the last imported bank booking. A month that ends after this
@@ -128,7 +136,7 @@ printf '{"p_month":"%s","p_key":"%s"}' 2026-10-01 "$(cat ~/.config/chief-of-staf
 `$ANON` is the `anonKey` from `config.js`. Any day of the month works for `p_month`.
 
 **Keep it in step with the app.** The function copies the profit rules in
-`index.html` (`totals`, `isCost`, `vatOf`, `netCents`, `vatReturn`). If those change, or
+`index.html` (`totals`, `isCost`, `catInvestment`, `vatOf`, `netCents`, `vatReturn`). If those change, or
 `VAT_SINCE` moves, change the function to match and re-run the SQL.
 
 ### Rotate the key

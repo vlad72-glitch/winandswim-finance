@@ -86,6 +86,92 @@ After changing any file:
 2. **Bump the version in `sw.js`** (`ws-finance-v1` → `ws-finance-v2`) so
    phones drop the cached old version.
 
+## Monthly totals for the chief of staff
+
+Vlad's chief of staff (a script with no login) reads one month's totals through the
+database function `public.monthly_summary(p_month, p_key)`, defined in
+`supabase-monthly-summary.sql`. It returns aggregates only, never a transaction:
+
+```json
+{"month":"2026-10","income":1234.56,"costs":987.65,"profit":246.91,"btw_due":45.67,"bank_data_through":"2026-11-03"}
+```
+
+- `income`, `costs`, `profit`: exactly the Dashboard tiles for that month (same
+  "counts in" month, same excluded categories, refunds lowering their cost, and excl.
+  btw from 4 Oct 2026).
+- `btw_due`: the month's exact btw (positive = to pay), worked out the same way as the
+  Dashboard's btw for a quarter; `null` for months before the KOR ended.
+- `bank_data_through`: the last imported bank booking. A month that ends after this
+  date isn't fully imported yet, so its figures are still incomplete.
+
+**How it's protected.** Calling it needs the public anon key (in `config.js`) *and*
+a 64-character random report key. The key lives only on Vlad's Mac, in
+`~/.config/chief-of-staff/wsfin_report_key` (chmod 600). The database stores only its
+SHA-256 hash, in `private.report_keys`: a schema the API doesn't expose and no API
+role can read. The function runs as `security definer` with an empty `search_path`,
+only the anon role may execute it, and any wrong, short or revoked key gets
+`not authorized`. A slow hash like bcrypt isn't needed: guessing 256 random bits is
+impossible either way, and bcrypt would let anyone with the public anon key burn
+database CPU.
+
+**Never commit the key or its hash.** This repo is public, so
+`supabase-monthly-summary.sql` here has only a placeholder. The ready-to-run copy with
+the real hash is `~/.config/chief-of-staff/wsfin_report_setup.sql` on Vlad's Mac.
+
+**Calling it.** POST, with the key in the body (never in the URL, which gets logged).
+`printf` is a shell builtin, so the key doesn't show up in the process list:
+
+```bash
+printf '{"p_month":"%s","p_key":"%s"}' 2026-10-01 "$(cat ~/.config/chief-of-staff/wsfin_report_key)" | curl -s -X POST "https://qyiiyojmkdwireqtwwfd.supabase.co/rest/v1/rpc/monthly_summary" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H "Content-Type: application/json" --data-binary @-
+```
+
+`$ANON` is the `anonKey` from `config.js`. Any day of the month works for `p_month`.
+
+**Keep it in step with the app.** The function copies the profit rules in
+`index.html` (`totals`, `isCost`, `vatOf`, `netCents`, `vatReturn`). If those change, or
+`VAT_SINCE` moves, change the function to match and re-run the SQL.
+
+### Rotate the key
+
+1. Make a new key and hash it:
+
+   ```bash
+   (umask 077; openssl rand -hex 32 | tr -d '\n' > ~/.config/chief-of-staff/wsfin_report_key.new)
+   ```
+
+   ```bash
+   shasum -a 256 < ~/.config/chief-of-staff/wsfin_report_key.new | cut -d' ' -f1
+   ```
+
+2. In Supabase → **SQL Editor**, add the new hash and switch every other key off:
+
+   ```sql
+   insert into private.report_keys (label, key_sha256) values ('chief-of-staff', '<new hash>');
+   update private.report_keys set revoked_at = now()
+    where revoked_at is null and key_sha256 <> '<new hash>';
+   ```
+
+3. Put the new key in place:
+
+   ```bash
+   mv ~/.config/chief-of-staff/wsfin_report_key.new ~/.config/chief-of-staff/wsfin_report_key
+   ```
+
+### Revoke access
+
+Switch every key off at once (takes effect on the next call):
+
+```sql
+update private.report_keys set revoked_at = now() where revoked_at is null;
+```
+
+Remove the whole thing:
+
+```sql
+drop function if exists public.monthly_summary(date, text);
+drop table if exists private.report_keys;
+```
+
 ## Notes
 
 - Free Supabase projects **pause after ~7 days without activity**; open the
